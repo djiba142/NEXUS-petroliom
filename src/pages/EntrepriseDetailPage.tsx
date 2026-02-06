@@ -1,0 +1,398 @@
+import { useParams, Link } from 'react-router-dom';
+import { 
+  Building2, 
+  MapPin, 
+  Phone, 
+  Mail, 
+  Fuel, 
+  ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ArrowLeft
+} from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { StockBadge } from '@/components/dashboard/StockIndicator';
+import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
+import { mockEntreprises, mockStations, mockAlerts } from '@/data/mockData';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+
+const getStockPercentage = (current: number, capacity: number) => {
+  return Math.round((current / capacity) * 100);
+};
+
+const getStockLevel = (current: number, capacity: number) => {
+  const percentage = (current / capacity) * 100;
+  if (percentage <= 15) return 'critical';
+  if (percentage <= 30) return 'warning';
+  if (percentage >= 85) return 'full';
+  return 'healthy';
+};
+
+const statusStyles = {
+  actif: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  suspendu: 'bg-amber-100 text-amber-700 border-amber-200',
+  ferme: 'bg-red-100 text-red-700 border-red-200'
+};
+
+const statusLabels = {
+  actif: 'Actif',
+  suspendu: 'Suspendu',
+  ferme: 'Fermé'
+};
+
+const stationStatusStyles = {
+  ouverte: 'bg-emerald-100 text-emerald-700',
+  fermee: 'bg-red-100 text-red-700',
+  en_travaux: 'bg-amber-100 text-amber-700',
+  attente_validation: 'bg-blue-100 text-blue-700'
+};
+
+const stationStatusLabels = {
+  ouverte: 'Ouverte',
+  fermee: 'Fermée',
+  en_travaux: 'En travaux',
+  attente_validation: 'En attente'
+};
+
+export default function EntrepriseDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  
+  const entreprise = mockEntreprises.find(e => e.id === id);
+  const stations = mockStations.filter(s => s.entrepriseId === id);
+  const alerts = mockAlerts.filter(a => a.entrepriseNom === entreprise?.nom && !a.resolu);
+  
+  if (!entreprise) {
+    return (
+      <DashboardLayout title="Entreprise non trouvée">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">Cette entreprise n'existe pas.</p>
+          <Link to="/entreprises">
+            <Button className="mt-4">Retour aux entreprises</Button>
+          </Link>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Calculate aggregate stats
+  const totalCapacity = {
+    essence: stations.reduce((sum, s) => sum + s.capacite.essence, 0),
+    gasoil: stations.reduce((sum, s) => sum + s.capacite.gasoil, 0),
+  };
+
+  const totalStock = {
+    essence: stations.reduce((sum, s) => sum + s.stockActuel.essence, 0),
+    gasoil: stations.reduce((sum, s) => sum + s.stockActuel.gasoil, 0),
+  };
+
+  const essencePercentage = getStockPercentage(totalStock.essence, totalCapacity.essence);
+  const gasoilPercentage = getStockPercentage(totalStock.gasoil, totalCapacity.gasoil);
+
+  const stationsOuvertes = stations.filter(s => s.statut === 'ouverte').length;
+  const alertesCritiques = alerts.filter(a => a.niveau === 'critique').length;
+
+  return (
+    <DashboardLayout 
+      title={entreprise.nom} 
+      subtitle={`${entreprise.type === 'compagnie' ? 'Compagnie' : 'Distributeur'} - ${entreprise.region}`}
+    >
+      {/* Back Button */}
+      <Link to="/entreprises" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
+        <ArrowLeft className="h-4 w-4" />
+        Retour aux entreprises
+      </Link>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Info & Contact */}
+        <div className="space-y-6">
+          {/* Company Info */}
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center border border-border overflow-hidden">
+                  {entreprise.logo ? (
+                    <img 
+                      src={entreprise.logo} 
+                      alt={`Logo ${entreprise.sigle}`}
+                      className="h-14 w-14 object-contain"
+                    />
+                  ) : (
+                    <span className="text-2xl font-bold text-primary">
+                      {entreprise.sigle.substring(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <CardTitle className="text-xl">{entreprise.sigle}</CardTitle>
+                  <span className={cn(
+                    "inline-flex px-2 py-0.5 rounded-full text-xs font-medium border mt-1",
+                    statusStyles[entreprise.statut]
+                  )}>
+                    {statusLabels[entreprise.statut]}
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>N° Agrément: <strong>{entreprise.numeroAgrement}</strong></span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{entreprise.region}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contact */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Contact Principal</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="font-medium">{entreprise.contact.nom}</p>
+                <p className="text-sm text-muted-foreground">Responsable</p>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a href={`tel:${entreprise.contact.telephone}`} className="hover:text-primary">
+                  {entreprise.contact.telephone}
+                </a>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <a href={`mailto:${entreprise.contact.email}`} className="hover:text-primary">
+                  {entreprise.contact.email}
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Stats */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Statistiques Globales</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 rounded-lg bg-secondary/50">
+                  <Fuel className="h-5 w-5 mx-auto text-primary mb-1" />
+                  <p className="text-2xl font-bold">{stations.length}</p>
+                  <p className="text-xs text-muted-foreground">Stations</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-secondary/50">
+                  <CheckCircle2 className="h-5 w-5 mx-auto text-stock-healthy mb-1" />
+                  <p className="text-2xl font-bold">{stationsOuvertes}</p>
+                  <p className="text-xs text-muted-foreground">Ouvertes</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-secondary/50">
+                  <AlertTriangle className="h-5 w-5 mx-auto text-stock-critical mb-1" />
+                  <p className="text-2xl font-bold">{alertesCritiques}</p>
+                  <p className="text-xs text-muted-foreground">Alertes</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-secondary/50">
+                  <Clock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+                  <p className="text-2xl font-bold">{stations.filter(s => s.statut === 'attente_validation').length}</p>
+                  <p className="text-xs text-muted-foreground">En attente</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Stations & Stock */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Stock Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Stock Global de l'Entreprise</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-6">
+                {/* Essence */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Essence Super</span>
+                    <StockBadge percentage={essencePercentage} />
+                  </div>
+                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        getStockLevel(totalStock.essence, totalCapacity.essence) === 'critical' && "bg-stock-critical",
+                        getStockLevel(totalStock.essence, totalCapacity.essence) === 'warning' && "bg-stock-warning",
+                        getStockLevel(totalStock.essence, totalCapacity.essence) === 'healthy' && "bg-stock-healthy",
+                        getStockLevel(totalStock.essence, totalCapacity.essence) === 'full' && "bg-stock-full"
+                      )}
+                      style={{ width: `${Math.min(essencePercentage, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {totalStock.essence.toLocaleString()} / {totalCapacity.essence.toLocaleString()} L
+                  </p>
+                </div>
+
+                {/* Gasoil */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">Gasoil</span>
+                    <StockBadge percentage={gasoilPercentage} />
+                  </div>
+                  <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'critical' && "bg-stock-critical",
+                        getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'warning' && "bg-stock-warning",
+                        getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'healthy' && "bg-stock-healthy",
+                        getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'full' && "bg-stock-full"
+                      )}
+                      style={{ width: `${Math.min(gasoilPercentage, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {totalStock.gasoil.toLocaleString()} / {totalCapacity.gasoil.toLocaleString()} L
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stock Evolution Chart */}
+          <StockEvolutionChart 
+            entrepriseId={id} 
+            title="Évolution des stocks de l'entreprise" 
+          />
+
+          {/* Stations List */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Stations ({stations.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stations.map(station => {
+                  const essencePercent = getStockPercentage(station.stockActuel.essence, station.capacite.essence);
+                  const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
+                  const essenceLevel = getStockLevel(station.stockActuel.essence, station.capacite.essence);
+                  const gasoilLevel = getStockLevel(station.stockActuel.gasoil, station.capacite.gasoil);
+                  const worstLevel = essenceLevel === 'critical' || gasoilLevel === 'critical' 
+                    ? 'critical' 
+                    : essenceLevel === 'warning' || gasoilLevel === 'warning'
+                      ? 'warning'
+                      : 'healthy';
+
+                  return (
+                    <Link
+                      key={station.id}
+                      to={`/stations/${station.id}`}
+                      className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-secondary/50 transition-all group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "h-10 w-10 rounded-lg flex items-center justify-center",
+                          worstLevel === 'critical' && "bg-destructive/10",
+                          worstLevel === 'warning' && "bg-amber-100",
+                          worstLevel === 'healthy' && "bg-emerald-100"
+                        )}>
+                          <Fuel className={cn(
+                            "h-5 w-5",
+                            worstLevel === 'critical' && "text-stock-critical",
+                            worstLevel === 'warning' && "text-stock-warning",
+                            worstLevel === 'healthy' && "text-stock-healthy"
+                          )} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium group-hover:text-primary transition-colors">
+                              {station.nom}
+                            </h3>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-medium",
+                              stationStatusStyles[station.statut]
+                            )}>
+                              {stationStatusLabels[station.statut]}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{station.ville} • {station.code}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="text-right hidden sm:block">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Essence:</span>
+                            <StockBadge percentage={essencePercent} size="sm" />
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Gasoil:</span>
+                            <StockBadge percentage={gasoilPercent} size="sm" />
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </Link>
+                  );
+                })}
+
+                {stations.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Fuel className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>Aucune station enregistrée</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Active Alerts */}
+          {alerts.length > 0 && (
+            <Card className="border-stock-critical/30">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-stock-critical" />
+                  Alertes Actives ({alerts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {alerts.slice(0, 5).map(alert => (
+                    <div
+                      key={alert.id}
+                      className={cn(
+                        "p-3 rounded-lg border",
+                        alert.niveau === 'critique' 
+                          ? "bg-destructive/5 border-destructive/20" 
+                          : "bg-amber-50 border-amber-200"
+                      )}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{alert.stationNom}</p>
+                          <p className="text-sm text-muted-foreground">{alert.message}</p>
+                        </div>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-medium",
+                          alert.niveau === 'critique' 
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-amber-100 text-amber-700"
+                        )}>
+                          {alert.niveau === 'critique' ? 'Critique' : 'Alerte'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
