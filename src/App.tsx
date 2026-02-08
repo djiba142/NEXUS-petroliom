@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RequireRole } from "@/components/RequireRole";
 import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import EntreprisesPage from "./pages/EntreprisesPage";
@@ -43,94 +44,147 @@ const App = () => (
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/acces-refuse" element={<AccessDeniedPage />} />
 
-            {/* Protected routes */}
+            {/* DASHBOARDS STIRCTS - CHAQUE ROLE A LE SIEN */}
             <Route path="/" element={
               <ProtectedRoute>
-                <Index />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
               </ProtectedRoute>
-            } />
+            }>
+              {/* Redirection intelligente gérée par le composant Index ou AuthContext */}
+              <Route index element={<Index />} />
+            </Route>
+
+            <Route path="/dashboard/sonap" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardSONAP />} />
+            </Route>
+
+            <Route path="/dashboard/sgp" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardSGP />} />
+            </Route>
+
+            <Route path="/dashboard/admin" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardSuperAdmin />} />
+            </Route>
+
+            <Route path="/dashboard/entreprise" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['responsable_entreprise']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardEntreprise />} />
+            </Route>
+
+            <Route path="/dashboard/station" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['gestionnaire_station']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<DashboardStation />} />
+            </Route>
+
+
+            {/* FONCTIONNALITÉS PARTAGÉES MAIS RESTREINTES */}
+
+            {/* Carte : Tout le monde sauf gestionnaire station (qui ne voit que sa station) */}
             <Route path="/carte" element={
               <ProtectedRoute>
-                <CartePage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<CartePage />} />
+            </Route>
+
+            {/* Entreprises : Admin, Inspecteur seulemnent */}
             <Route path="/entreprises" element={
               <ProtectedRoute>
-                <EntreprisesPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<EntreprisesPage />} />
+            </Route>
+
             <Route path="/entreprises/:id" element={
               <ProtectedRoute>
-                <EntrepriseDetailPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<EntrepriseDetailPage />} />
+            </Route>
+
+            {/* Stations : Tout le monde a un accès, mais la vue changera selon le rôle */}
             <Route path="/stations" element={
               <ProtectedRoute>
-                <StationsPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<StationsPage />} />
+            </Route>
+
             <Route path="/stations/:id" element={
               <ProtectedRoute>
-                <StationDetailPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<StationDetailPage />} />
+            </Route>
+
+            {/* Alertes : Tout le monde */}
             <Route path="/alertes" element={
               <ProtectedRoute>
-                <AlertesPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<AlertesPage />} />
+            </Route>
+
+            {/* Rapports : Admin, Inspecteur, Entreprise */}
             <Route path="/rapports" element={
               <ProtectedRoute>
-                <RapportsPage />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<RapportsPage />} />
+            </Route>
+
+            {/* ADMINISTRATION SYSTEME - STRICTEMENT SUPER ADMIN & ADMIN ETAT */}
+            <Route path="/utilisateurs" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<UtilisateursPage />} />
+            </Route>
+
+            <Route path="/parametres" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ParametresPage />} />
+            </Route>
+
+            {/* PAGES COMMUNES */}
             <Route path="/profil" element={
               <ProtectedRoute>
                 <ProfilPage />
               </ProtectedRoute>
             } />
+
             <Route path="/a-propos" element={
               <ProtectedRoute>
                 <AProposPage />
-              </ProtectedRoute>
-            } />
-
-            {/* Role-specific dashboards */}
-            <Route path="/dashboard/sonap" element={
-              <ProtectedRoute requiredRole="admin_etat">
-                <DashboardSONAP />
-              </ProtectedRoute>
-            } />
-            <Route path="/dashboard/sgp" element={
-              <ProtectedRoute requiredRole="admin_etat">
-                <DashboardSGP />
-              </ProtectedRoute>
-            } />
-            <Route path="/dashboard/entreprise" element={
-              <ProtectedRoute requiredRole="responsable_entreprise">
-                <DashboardEntreprise />
-              </ProtectedRoute>
-            } />
-            <Route path="/dashboard/admin" element={
-              <ProtectedRoute requiredRole="super_admin">
-                <DashboardSuperAdmin />
-              </ProtectedRoute>
-            } />
-            <Route path="/dashboard/station" element={
-              <ProtectedRoute requiredRole="gestionnaire_station">
-                <DashboardStation />
-              </ProtectedRoute>
-            } />
-
-            {/* Admin routes */}
-            <Route path="/utilisateurs" element={
-              <ProtectedRoute requiredRole="super_admin">
-                <UtilisateursPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/parametres" element={
-              <ProtectedRoute requiredRole="admin_etat">
-                <ParametresPage />
               </ProtectedRoute>
             } />
 

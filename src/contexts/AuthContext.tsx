@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, createClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 // Types de rôles disponibles dans l'application
@@ -215,8 +215,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       // Étape 1 : Créer l'utilisateur via Supabase Auth
-      // Note: L'utilisateur sera auto-confirmé si la config Supabase le permet
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      // Utilisation d'un client temporaire pour éviter de déconnecter l'admin actuel
+      const tempClient = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        }
+      );
+
+      const { data: authData, error: signUpError } = await tempClient.auth.signUp({
         email,
         password,
         options: {
@@ -232,18 +244,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newUserId = authData.user.id;
 
       // Étape 2 : Assigner le rôle à l'utilisateur
-      // Note: Le trigger handle_new_user() crée déjà un rôle par défaut 'gestionnaire_station'
-      // On doit donc UPDATE au lieu de INSERT si le rôle existe déjà
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id: newUserId,
-          role: newUserRole
-        }, { onConflict: 'user_id, role' }); // On utilise upsert pour être plus safe
+      // Le trigger handle_new_user() crée déjà un rôle par défaut 'gestionnaire_station'.
+      // Pour éviter les doublons, on MET À JOUR cette ligne au lieu d'en insérer une nouvelle.
 
-      if (roleError) {
-        console.warn("Erreur lors de l'assignation du rôle:", roleError);
-        // On ne throw pas forcément ici pour tenter de créer le profil quand même
+      // D'abord on essaie de mettre à jour le rôle existant
+      const { data: updateData, error: updateError } = await supabase
+        .from('user_roles')
+        .update({ role: newUserRole })
+        .eq('user_id', newUserId)
+        .select();
+
+      // Si aucune ligne n'a été mise à jour (le trigger a failli pour une raison quelconque),
+      // alors on insère le rôle.
+      if (!updateData || updateData.length === 0) {
+        const { error: insertError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: newUserId,
+            role: newUserRole
+          });
+
+        if (insertError) {
+          console.error("Erreur lors de l'insertion du rôle:", insertError);
+        }
+      } else if (updateError) {
+        console.error("Erreur lors de la mise à jour du rôle:", updateError);
       }
 
       // Étape 3 : Créer ou mettre à jour le profil (ESSENTIEL pour l'affichage)

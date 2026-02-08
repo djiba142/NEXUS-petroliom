@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Building2, 
-  Fuel, 
-  AlertTriangle, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Building2,
+  Fuel,
+  AlertTriangle,
+  FileText,
   Settings,
   Users,
   ChevronLeft,
@@ -29,13 +29,13 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Tableau de bord', href: '/', icon: LayoutDashboard },
-  { name: 'Carte Nationale', href: '/carte', icon: Map },
-  { name: 'Entreprises', href: '/entreprises', icon: Building2 },
-  { name: 'Stations', href: '/stations', icon: Fuel },
-  { name: 'Alertes', href: '/alertes', icon: AlertTriangle, badge: 4 },
-  { name: 'Rapports', href: '/rapports', icon: FileText },
-  { name: 'À Propos', href: '/a-propos', icon: Info },
+  { name: 'Tableau de bord', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
+  { name: 'Carte Nationale', href: '/carte', icon: Map, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
+  { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin', 'admin_etat', 'inspecteur'] },
+  { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
+  { name: 'Alertes', href: '/alertes', icon: AlertTriangle, badge: 4, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station'] },
+  { name: 'Rapports', href: '/rapports', icon: FileText, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
+  { name: 'À Propos', href: '/a-propos', icon: Info }, // Visible to all
 ];
 
 const dashboardNavigation: NavItem[] = [
@@ -47,7 +47,7 @@ const dashboardNavigation: NavItem[] = [
 ];
 
 const adminNavigation: NavItem[] = [
-  { name: 'Utilisateurs', href: '/utilisateurs', icon: Users, roles: ['super_admin', 'admin_etat'] },
+  { name: 'Utilisateurs', href: '/utilisateurs', icon: Users, roles: ['super_admin'] }, // Admin État cannot see this
   { name: 'Paramètres', href: '/parametres', icon: Settings, roles: ['super_admin', 'admin_etat'] },
 ];
 
@@ -57,14 +57,15 @@ export function Sidebar() {
   const { role } = useAuth();
 
   // Filter navigation based on role
-  const filterByRole = (items: NavItem[]) => 
+  const filterByRole = (items: NavItem[]) =>
     items.filter(item => !item.roles || (role && item.roles.includes(role)));
 
+  const visibleMainNav = filterByRole(navigation);
   const visibleDashboardNav = filterByRole(dashboardNavigation);
   const visibleAdminNav = filterByRole(adminNavigation);
 
   return (
-    <aside 
+    <aside
       className={cn(
         "fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
         collapsed ? "w-[70px]" : "w-[260px]"
@@ -86,11 +87,11 @@ export function Sidebar() {
         <div className="mb-2 px-3">
           {!collapsed && <p className="text-[10px] uppercase tracking-wider text-sidebar-foreground/40 font-medium">Principal</p>}
         </div>
-        
-        {navigation.map((item) => {
-          const isActive = location.pathname === item.href || 
+
+        {visibleMainNav.map((item) => {
+          const isActive = location.pathname === item.href ||
             (item.href !== '/' && location.pathname.startsWith(item.href));
-          
+
           return (
             <NavLink
               key={item.name}
@@ -125,7 +126,7 @@ export function Sidebar() {
 
             {visibleDashboardNav.map((item) => {
               const isActive = location.pathname === item.href;
-              
+
               return (
                 <NavLink
                   key={item.name}
@@ -157,7 +158,7 @@ export function Sidebar() {
 
             {visibleAdminNav.map((item) => {
               const isActive = location.pathname === item.href;
-              
+
               return (
                 <NavLink
                   key={item.name}
