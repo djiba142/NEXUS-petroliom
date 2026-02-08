@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { 
-  Ship, 
-  Droplets, 
-  AlertTriangle, 
+import {
+  Ship,
+  Droplets,
+  AlertTriangle,
   TrendingUp,
   Package,
   Globe,
@@ -41,35 +41,35 @@ interface Importation {
 export default function DashboardSONAP() {
   const [importations, setImportations] = useState<Importation[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Realtime hooks
   const { stations: realtimeStations, loading: stationsLoading, refetch: refetchStations } = useRealtimeStations();
   const { alertes, criticalCount, warningCount } = useRealtimeAlertes({ showToast: true });
 
   // Convert realtime stations to map format
-  const mapStations = realtimeStations.length > 0 
+  const mapStations = realtimeStations.length > 0
     ? realtimeStations.map(s => ({
-        id: s.id,
-        nom: s.nom,
-        code: s.code,
-        ville: s.ville,
-        region: s.region,
-        adresse: s.adresse,
-        type: s.type as any,
-        statut: s.statut as any,
-        entrepriseId: s.entreprise_id,
-        entrepriseNom: '',
-        coordonnees: s.latitude && s.longitude ? { lat: s.latitude, lng: s.longitude } : undefined,
-        stockActuel: { essence: s.stock_essence, gasoil: s.stock_gasoil, gpl: s.stock_gpl, lubrifiants: s.stock_lubrifiants },
-        capacite: { essence: s.capacite_essence, gasoil: s.capacite_gasoil, gpl: s.capacite_gpl, lubrifiants: s.capacite_lubrifiants },
-        gestionnaire: { nom: s.gestionnaire_nom || '', telephone: s.gestionnaire_telephone || '', email: '' },
-        nombrePompes: s.nombre_pompes,
-      }))
+      id: s.id,
+      nom: s.nom,
+      code: s.code,
+      ville: s.ville,
+      region: s.region,
+      adresse: s.adresse,
+      type: s.type as any,
+      statut: s.statut as any,
+      entrepriseId: s.entreprise_id,
+      entrepriseNom: '',
+      coordonnees: s.latitude && s.longitude ? { lat: s.latitude, lng: s.longitude } : undefined,
+      stockActuel: { essence: s.stock_essence, gasoil: s.stock_gasoil, gpl: s.stock_gpl, lubrifiants: s.stock_lubrifiants },
+      capacite: { essence: s.capacite_essence, gasoil: s.capacite_gasoil, gpl: s.capacite_gpl, lubrifiants: s.capacite_lubrifiants },
+      gestionnaire: { nom: s.gestionnaire_nom || '', telephone: s.gestionnaire_telephone || '', email: '' },
+      nombrePompes: s.nombre_pompes,
+    }))
     : mockStations;
 
   useEffect(() => {
     fetchImportations();
-    
+
     // Subscribe to importations realtime
     const channel = supabase
       .channel('importations-realtime')
@@ -127,22 +127,42 @@ export default function DashboardSONAP() {
     const now = new Date();
     const diffTime = arrival.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) return 'Arrivé';
     if (diffDays === 0) return 'Aujourd\'hui';
     if (diffDays === 1) return 'Demain';
     return `${diffDays} jours`;
   };
 
+  // Constantes de consommation journalière estimée (en litres)
+  const CONSOMMATION_JOURNALIERE = {
+    essence: 800000,
+    gasoil: 1200000,
+    gpl: 100000,
+  };
+
+  // Calcul des stocks nationaux en temps réel
+  const stockNational = realtimeStations.reduce((acc, station) => ({
+    essence: acc.essence + (station.stock_essence || 0),
+    gasoil: acc.gasoil + (station.stock_gasoil || 0),
+    gpl: acc.gpl + (station.stock_gpl || 0),
+  }), { essence: 0, gasoil: 0, gpl: 0 });
+
+  // Calcul de l'autonomie (en jours)
+  const autonomie = {
+    essence: Math.round(stockNational.essence / CONSOMMATION_JOURNALIERE.essence),
+    gasoil: Math.round(stockNational.gasoil / CONSOMMATION_JOURNALIERE.gasoil),
+  };
+
   return (
-    <DashboardLayout 
-      title="Dashboard SONAP" 
+    <DashboardLayout
+      title="Dashboard SONAP"
       subtitle="Suivi des importations et autonomie nationale"
     >
       {/* Compteurs de Survie */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <NationalAutonomyGauge daysRemaining={12} fuelType="essence" />
-        <NationalAutonomyGauge daysRemaining={15} fuelType="gasoil" />
+        <NationalAutonomyGauge daysRemaining={autonomie.essence || 0} fuelType="essence" />
+        <NationalAutonomyGauge daysRemaining={autonomie.gasoil || 0} fuelType="gasoil" />
         <StatCard
           title="Navires en route"
           value={importations.filter(i => i.statut === 'en_route').length}
@@ -211,7 +231,7 @@ export default function DashboardSONAP() {
               </div>
             ) : (
               importations.filter(i => i.statut !== 'termine').slice(0, 5).map((imp) => (
-                <div 
+                <div
                   key={imp.id}
                   className="p-4 rounded-xl bg-secondary/50 border border-border"
                 >
@@ -251,7 +271,7 @@ export default function DashboardSONAP() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <StockEvolutionChart title="Évolution des Stocks Nationaux" />
-        
+
         {/* Comparatif Distributeurs */}
         <Card>
           <CardHeader>
@@ -278,8 +298,8 @@ export default function DashboardSONAP() {
                     {dist.stock}k / {dist.capacite}k L
                   </span>
                 </div>
-                <Progress 
-                  value={(dist.stock / dist.capacite) * 100} 
+                <Progress
+                  value={(dist.stock / dist.capacite) * 100}
                   className="h-2"
                 />
               </div>
@@ -313,15 +333,14 @@ export default function DashboardSONAP() {
               { station: 'TMI Kaloum', ecart: '+300 GNF', status: 'en_cours' },
               { station: 'Star Oil Kindia', ecart: '+200 GNF', status: 'resolu' },
             ].map((alerte, index) => (
-              <div 
+              <div
                 key={index}
-                className={`p-4 rounded-lg border ${
-                  alerte.status === 'non_resolu' 
-                    ? 'bg-red-50 border-red-200' 
-                    : alerte.status === 'en_cours'
+                className={`p-4 rounded-lg border ${alerte.status === 'non_resolu'
+                  ? 'bg-red-50 border-red-200'
+                  : alerte.status === 'en_cours'
                     ? 'bg-amber-50 border-amber-200'
                     : 'bg-green-50 border-green-200'
-                }`}
+                  }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">{alerte.station}</span>

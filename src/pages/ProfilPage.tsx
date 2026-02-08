@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building2, 
+import {
+  User,
+  Mail,
+  Phone,
+  Building2,
   MapPin,
   Camera,
   Save,
-  Shield
+  Shield,
+  Copy
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -19,11 +20,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth, ROLE_LABELS, ROLE_DESCRIPTIONS } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ProfilPage() {
   const { profile, role, user } = useAuth();
   const { toast } = useToast();
-  
+
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
 
@@ -44,8 +46,8 @@ export default function ProfilPage() {
   };
 
   return (
-    <DashboardLayout 
-      title="Mon Profil" 
+    <DashboardLayout
+      title="Mon Profil"
       subtitle="Gérer vos informations personnelles"
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -60,30 +62,30 @@ export default function ProfilPage() {
                     {getInitials(profile?.full_name || user?.email || 'U')}
                   </AvatarFallback>
                 </Avatar>
-                <Button 
-                  size="icon" 
-                  variant="secondary" 
+                <Button
+                  size="icon"
+                  variant="secondary"
                   className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
                 >
                   <Camera className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               <h3 className="text-xl font-bold font-display">
                 {profile?.full_name || 'Utilisateur'}
               </h3>
               <p className="text-sm text-muted-foreground mb-3">
                 {profile?.email || user?.email}
               </p>
-              
+
               {role && (
                 <Badge variant="secondary" className="mb-4">
                   {ROLE_LABELS[role]}
                 </Badge>
               )}
-              
+
               <Separator className="my-4 w-full" />
-              
+
               <div className="w-full text-left space-y-3">
                 <div className="flex items-center gap-3 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
@@ -159,6 +161,27 @@ export default function ProfilPage() {
                   placeholder="+224 6XX XX XX XX"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="userId" className="text-xs text-muted-foreground">ID Utilisateur (Technique)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="userId"
+                    value={user?.id || ''}
+                    readOnly
+                    className="bg-muted font-mono text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(user?.id || '');
+                      toast({ title: "ID copié !" });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
             <Separator />
@@ -169,17 +192,56 @@ export default function ProfilPage() {
                 <Shield className="h-5 w-5 text-primary" />
                 <h4 className="font-medium">Rôle et Permissions</h4>
               </div>
-              {role && (
+              {role ? (
                 <>
                   <p className="text-sm font-medium">{ROLE_LABELS[role]}</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {ROLE_DESCRIPTIONS[role]}
                   </p>
                 </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-amber-600">Aucun rôle assigné</p>
+                  <p className="text-sm text-muted-foreground">
+                    Votre compte n'a pas encore de privilèges. Contactez un administrateur ou utilisez votre ID pour l'initialisation.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground font-mono bg-background p-2 rounded border flex-1">
+                      ID: {user?.id}
+                    </p>
+                  </div>
+                </div>
               )}
               <p className="text-xs text-muted-foreground mt-2">
                 Le rôle est attribué par un administrateur et ne peut pas être modifié.
               </p>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full border-dashed"
+                onClick={async () => {
+                  const { data, error } = await supabase.from('user_roles').select('*').eq('user_id', user?.id);
+                  if (error) {
+                    toast({
+                      variant: "destructive",
+                      title: "Erreur lecture rôle (RLS?)",
+                      description: error.message
+                    });
+                  } else {
+                    toast({
+                      title: "Vérification Base de Données",
+                      description: data?.length ? `Rôle trouvé: ${data[0].role}` : "Aucun rôle trouvé en base"
+                    });
+                    // Forcer un rechargement si trouvé
+                    if (data?.length && !role) {
+                      window.location.reload();
+                    }
+                  }
+                }}
+              >
+                🕵️ Debug: Vérifier mes permissions en direct
+              </Button>
             </div>
 
             <Button onClick={handleSave} className="gap-2">

@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { ROLE_LABELS, AppRole } from '@/contexts/AuthContext';
+import { ROLE_LABELS, AppRole, useAuth } from '@/contexts/AuthContext';
 import { mockEntreprises, mockStations } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -45,9 +45,10 @@ interface CreateUserDialogProps {
 }
 
 export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUserDialogProps) {
+  const { createUser } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
@@ -64,46 +65,27 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
   const selectedRole = form.watch('role');
   const selectedEntreprise = form.watch('entrepriseId');
 
-  const filteredStations = selectedEntreprise 
+  const filteredStations = selectedEntreprise
     ? mockStations.filter(s => s.entrepriseId === selectedEntreprise)
     : [];
 
   const onSubmit = async (data: CreateUserForm) => {
     setIsLoading(true);
-    
+
     try {
-      // Get current session for authorization
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('Non authentifié');
-      }
+      // Utilisation de la fonction createUser du contexte d'authentification
+      // Cette fonction gère la création dans auth.users et l'assignation du rôle
+      const { error, userId } = await createUser({
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+        role: data.role,
+        entrepriseId: data.entrepriseId || undefined,
+        stationId: data.stationId || undefined,
+      });
 
-      // Call the create-user edge function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            email: data.email,
-            password: data.password,
-            full_name: data.fullName,
-            role: data.role,
-            phone: data.phone || undefined,
-            entreprise_id: data.entrepriseId || undefined,
-            station_id: data.stationId || undefined,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erreur lors de la création');
+      if (error) {
+        throw error;
       }
 
       toast({
@@ -190,8 +172,8 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
 
             <div className="col-span-2 space-y-2">
               <Label htmlFor="role">Rôle *</Label>
-              <Select 
-                value={form.watch('role')} 
+              <Select
+                value={form.watch('role')}
                 onValueChange={(value: AppRole) => form.setValue('role', value)}
               >
                 <SelectTrigger>
@@ -210,8 +192,8 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
             {(selectedRole === 'responsable_entreprise' || selectedRole === 'gestionnaire_station') && (
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="entrepriseId">Entreprise</Label>
-                <Select 
-                  value={form.watch('entrepriseId')} 
+                <Select
+                  value={form.watch('entrepriseId')}
                   onValueChange={(value) => {
                     form.setValue('entrepriseId', value);
                     form.setValue('stationId', '');
@@ -234,8 +216,8 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
             {selectedRole === 'gestionnaire_station' && selectedEntreprise && (
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="stationId">Station</Label>
-                <Select 
-                  value={form.watch('stationId')} 
+                <Select
+                  value={form.watch('stationId')}
                   onValueChange={(value) => form.setValue('stationId', value)}
                 >
                   <SelectTrigger>

@@ -42,7 +42,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/acces-refuse" element={<AccessDeniedPage />} />
-            
+
             {/* Protected routes */}
             <Route path="/" element={
               <ProtectedRoute>
@@ -94,7 +94,7 @@ const App = () => (
                 <AProposPage />
               </ProtectedRoute>
             } />
-            
+
             {/* Role-specific dashboards */}
             <Route path="/dashboard/sonap" element={
               <ProtectedRoute requiredRole="admin_etat">
@@ -121,10 +121,10 @@ const App = () => (
                 <DashboardStation />
               </ProtectedRoute>
             } />
-            
+
             {/* Admin routes */}
             <Route path="/utilisateurs" element={
-              <ProtectedRoute requiredRole="admin_etat">
+              <ProtectedRoute requiredRole="super_admin">
                 <UtilisateursPage />
               </ProtectedRoute>
             } />
@@ -133,7 +133,7 @@ const App = () => (
                 <ParametresPage />
               </ProtectedRoute>
             } />
-            
+
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>

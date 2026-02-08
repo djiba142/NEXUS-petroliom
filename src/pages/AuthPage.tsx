@@ -18,10 +18,10 @@ export default function AuthPage() {
   const navigate = useNavigate();
   const { signIn, user } = useAuth();
   const { toast } = useToast();
-  
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -77,7 +77,8 @@ export default function AuthPage() {
           title: 'Connexion réussie',
           description: 'Bienvenue sur SIHG',
         });
-        navigate('/');
+        // La redirection sera gérée par le useEffect qui surveille l'utilisateur
+        // ou on peut rediriger manuellement ici si on a accès au rôle immédiatement
       }
     } catch (error) {
       toast({

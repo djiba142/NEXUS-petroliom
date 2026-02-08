@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { 
-  Truck, 
-  Package, 
-  Clock, 
+import {
+  Truck,
+  Package,
+  Clock,
   CheckCircle2,
   AlertTriangle,
   MapPin,
   Filter,
   Plus,
-  Eye
+  Eye,
+  TrendingUp
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -96,7 +97,7 @@ export default function DashboardSGP() {
   const handleUpdateStatus = async (ordreId: string, newStatus: string) => {
     try {
       const updateData: Record<string, unknown> = { statut: newStatus };
-      
+
       if (newStatus === 'approuve') {
         updateData.date_approbation = new Date().toISOString();
         updateData.approuve_par = user?.id;
@@ -169,8 +170,8 @@ export default function DashboardSGP() {
   };
 
   return (
-    <DashboardLayout 
-      title="Dashboard SGP" 
+    <DashboardLayout
+      title="Dashboard SGP"
       subtitle="Gestion des ordres de livraison et logistique"
     >
       {/* Stats */}
@@ -233,10 +234,15 @@ export default function DashboardSGP() {
               <TabsTrigger value="en_attente">En attente ({stats.enAttente})</TabsTrigger>
               <TabsTrigger value="en_cours">En cours ({stats.enCours})</TabsTrigger>
               <TabsTrigger value="livre">Livrés ({stats.livres})</TabsTrigger>
+              <TabsTrigger value="prix">Prix Officiels</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="prix">
+              <PrixOfficielsManager />
+            </TabsContent>
+
             <TabsContent value="tous">
-              <OrdersTable 
+              <OrdersTable
                 ordres={ordres}
                 getStatusColor={getStatusColor}
                 getStatusLabel={getStatusLabel}
@@ -246,7 +252,7 @@ export default function DashboardSGP() {
               />
             </TabsContent>
             <TabsContent value="en_attente">
-              <OrdersTable 
+              <OrdersTable
                 ordres={ordres.filter(o => o.statut === 'en_attente')}
                 getStatusColor={getStatusColor}
                 getStatusLabel={getStatusLabel}
@@ -256,7 +262,7 @@ export default function DashboardSGP() {
               />
             </TabsContent>
             <TabsContent value="en_cours">
-              <OrdersTable 
+              <OrdersTable
                 ordres={ordres.filter(o => o.statut === 'en_cours')}
                 getStatusColor={getStatusColor}
                 getStatusLabel={getStatusLabel}
@@ -266,7 +272,7 @@ export default function DashboardSGP() {
               />
             </TabsContent>
             <TabsContent value="livre">
-              <OrdersTable 
+              <OrdersTable
                 ordres={ordres.filter(o => o.statut === 'livre')}
                 getStatusColor={getStatusColor}
                 getStatusLabel={getStatusLabel}
@@ -367,13 +373,13 @@ interface OrdersTableProps {
   onViewDetails: (ordre: OrdresLivraison) => void;
 }
 
-function OrdersTable({ 
-  ordres, 
-  getStatusColor, 
-  getStatusLabel, 
+function OrdersTable({
+  ordres,
+  getStatusColor,
+  getStatusLabel,
   getPrioriteColor,
   onUpdateStatus,
-  onViewDetails 
+  onViewDetails
 }: OrdersTableProps) {
   if (ordres.length === 0) {
     return (
@@ -425,16 +431,16 @@ function OrdersTable({
             </TableCell>
             <TableCell className="text-right">
               <div className="flex items-center justify-end gap-2">
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
                   onClick={() => onViewDetails(ordre)}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
                 {ordre.statut === 'en_attente' && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => onUpdateStatus(ordre.id, 'approuve')}
                   >
@@ -442,8 +448,8 @@ function OrdersTable({
                   </Button>
                 )}
                 {ordre.statut === 'approuve' && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => onUpdateStatus(ordre.id, 'en_cours')}
                   >
@@ -451,8 +457,8 @@ function OrdersTable({
                   </Button>
                 )}
                 {ordre.statut === 'en_cours' && (
-                  <Button 
-                    variant="default" 
+                  <Button
+                    variant="default"
                     size="sm"
                     onClick={() => onUpdateStatus(ordre.id, 'livre')}
                   >
@@ -465,5 +471,135 @@ function OrdersTable({
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * Composant de gestion des prix officiels des hydrocarbures
+ * Permet de visualiser et modifier les prix (si admin_etat)
+ */
+function PrixOfficielsManager() {
+  const [prix, setPrix] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    fetchPrix();
+  }, []);
+
+  const fetchPrix = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('prix_officiels')
+        .select('*')
+        .order('date_effet', { ascending: false });
+
+      if (error) throw error;
+      if (data) setPrix(data);
+    } catch (error) {
+      console.error('Erreur chargement prix:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les prix officiels",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePrix = async (id: string, newPrix: number) => {
+    try {
+      const { error } = await supabase
+        .from('prix_officiels')
+        .update({
+          prix_litre: newPrix,
+          modifie_par: user?.id,
+          date_effet: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Prix mis à jour",
+        description: "Le nouveau prix officiel a été enregistré."
+      });
+      fetchPrix();
+    } catch (error) {
+      console.error('Erreur maj prix:', error);
+      toast({
+        title: "Erreur",
+        description: "Échec de la mise à jour du prix",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center p-8">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    );
+  }
+
+  if (prix.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        Aucun prix officiel configuré.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {prix.map((p) => (
+          <Card key={p.id}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium uppercase text-muted-foreground">
+                {p.carburant}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-bold">{p.prix_litre.toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground">GNF/L</span>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    const input = prompt(`Nouveau prix pour ${p.carburant} (actuel: ${p.prix_litre} GNF)`);
+                    if (input) {
+                      const newPrice = parseFloat(input);
+                      if (!isNaN(newPrice) && newPrice > 0) {
+                        handleUpdatePrix(p.id, newPrice);
+                      } else {
+                        toast({
+                          title: "Valeur invalide",
+                          description: "Veuillez entrer un montant valide.",
+                          variant: "destructive"
+                        });
+                      }
+                    }
+                  }}
+                >
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Modifier
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Dernière modif: {new Date(p.date_effet).toLocaleDateString()}
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
