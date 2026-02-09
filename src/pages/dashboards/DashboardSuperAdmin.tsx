@@ -13,7 +13,9 @@ import {
   Map as MapIcon,
   Ship,
   TrendingUp,
-  Droplets
+  Droplets,
+  RefreshCw,
+  Fuel
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -26,7 +28,8 @@ import { Link } from 'react-router-dom';
 import { NationalAutonomyGauge } from '@/components/charts/NationalAutonomyGauge';
 import { GuineaMap } from '@/components/map/GuineaMap';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockStations } from '@/data/mockData';
+import { Station } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface SystemStats {
   totalUsers: number;
@@ -42,43 +45,44 @@ export default function DashboardSuperAdmin() {
     totalStations: 0,
     totalAlertes: 0,
   });
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Constantes de consommation (mêmes que SONAP)
+  // Constantes de consommation nationale (estimées)
   const CONSOMMATION_JOURNALIERE = {
     essence: 800000,
     gasoil: 1200000,
-    gpl: 100000,
   };
 
-  // État pour les stocks réels (simulé ici avec mockStations pour l'instant, mais prêt à être connecté)
-  const stockNational = mockStations.reduce((acc, station) => ({
-    essence: acc.essence + (station.stockActuel.essence || 0),
-    gasoil: acc.gasoil + (station.stockActuel.gasoil || 0),
-    gpl: acc.gpl + (station.stockActuel.gpl || 0),
-  }), { essence: 0, gasoil: 0, gpl: 0 });
+  const totalStock = stations.reduce((acc, s) => ({
+    essence: acc.essence + (s.stockActuel.essence || 0),
+    gasoil: acc.gasoil + (s.stockActuel.gasoil || 0),
+  }), { essence: 0, gasoil: 0 });
 
   const autonomie = {
-    essence: Math.round(stockNational.essence / CONSOMMATION_JOURNALIERE.essence),
-    gasoil: Math.round(stockNational.gasoil / CONSOMMATION_JOURNALIERE.gasoil),
+    essence: totalStock.essence > 0 ? Math.round(totalStock.essence / CONSOMMATION_JOURNALIERE.essence) : 0,
+    gasoil: totalStock.gasoil > 0 ? Math.round(totalStock.gasoil / CONSOMMATION_JOURNALIERE.gasoil) : 0,
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchData();
   }, []);
 
-  const fetchStats = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
       const [
         { count: usersCount },
         { count: entreprisesCount },
         { count: stationsCount },
         { count: alertesCount },
+        { data: stData }
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('entreprises').select('*', { count: 'exact', head: true }),
         supabase.from('stations').select('*', { count: 'exact', head: true }),
         supabase.from('alertes').select('*', { count: 'exact', head: true }).eq('resolu', false),
+        supabase.from('stations').select('*, entreprises:entreprise_id(nom, sigle)')
       ]);
 
       setStats({
@@ -87,6 +91,35 @@ export default function DashboardSuperAdmin() {
         totalStations: stationsCount || 0,
         totalAlertes: alertesCount || 0,
       });
+
+      const mappedStations: Station[] = (stData || []).map(s => ({
+        id: s.id,
+        nom: s.nom,
+        code: s.code,
+        adresse: s.adresse,
+        ville: s.ville,
+        region: s.region,
+        type: s.type as any,
+        entrepriseId: s.entreprise_id,
+        entrepriseNom: s.entreprises?.nom || 'Inconnu',
+        capacite: {
+          essence: s.capacite_essence,
+          gasoil: s.capacite_gasoil,
+          gpl: s.capacite_gpl,
+          lubrifiants: s.capacite_lubrifiants,
+        },
+        stockActuel: {
+          essence: s.stock_essence,
+          gasoil: s.stock_gasoil,
+          gpl: s.stock_gpl,
+          lubrifiants: s.stock_lubrifiants,
+        },
+        nombrePompes: s.nombre_pompes,
+        gestionnaire: { nom: '', telephone: '', email: '' },
+        statut: s.statut as any,
+      }));
+      setStations(mappedStations);
+
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
@@ -103,9 +136,20 @@ export default function DashboardSuperAdmin() {
 
   return (
     <DashboardLayout
-      title="Superviseur Général"
-      subtitle="Vue d'ensemble technique et opérationnelle (Mode Dieu)"
+      title="Tableau de Bord National"
+      subtitle="Supervision complète du système d'information"
     >
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Shield className="h-6 w-6 text-primary" />
+          Vue Administrative Globale
+        </h2>
+        <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2">
+          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          Actualiser
+        </Button>
+      </div>
+
       {/* Top Value Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
@@ -135,10 +179,10 @@ export default function DashboardSuperAdmin() {
         />
       </div>
 
-      {/* National Dashboard Section (Merged from SONAP) */}
+      {/* National Dashboard Section */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <Activity className="h-5 w-5 text-primary" />
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-primary">
+          <Activity className="h-5 w-5" />
           État National des Stocks
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -154,22 +198,22 @@ export default function DashboardSuperAdmin() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-2 bg-background/60 rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-background/60 rounded-lg border border-border">
                   <div className="flex items-center gap-3">
                     <Ship className="h-4 w-4 text-blue-500" />
                     <span className="font-medium">MT Conakry Star</span>
                   </div>
                   <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200">
-                    En approche (24h)
+                    Déchargement au Port
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between p-2 bg-background/60 rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-background/60 rounded-lg border border-border">
                   <div className="flex items-center gap-3">
                     <Ship className="h-4 w-4 text-orange-500" />
                     <span className="font-medium">Ocean Pride</span>
                   </div>
                   <Badge variant="outline" className="text-orange-600 bg-orange-50 border-orange-200">
-                    Au mouillage
+                    En mer (ETA 48h)
                   </Badge>
                 </div>
               </div>
@@ -179,8 +223,8 @@ export default function DashboardSuperAdmin() {
       </div>
 
       {/* Admin Actions Grid */}
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Settings className="h-5 w-5 text-primary" />
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-primary">
+        <Settings className="h-5 w-5" />
         Administration Système
       </h3>
 
@@ -191,9 +235,9 @@ export default function DashboardSuperAdmin() {
               <div className="h-12 w-12 rounded-xl bg-purple-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <Users className="h-6 w-6 text-purple-600" />
               </div>
-              <h4 className="font-medium">Gérer les Utilisateurs</h4>
+              <h4 className="font-medium">Utilisateurs</h4>
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Création de comptes, Rôles, Permissions
+                Comptes et Permissions
               </p>
             </CardContent>
           </Link>
@@ -205,23 +249,23 @@ export default function DashboardSuperAdmin() {
               <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <Database className="h-6 w-6 text-blue-600" />
               </div>
-              <h4 className="font-medium">Gérer les Entités</h4>
+              <h4 className="font-medium">Entités</h4>
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Entreprises, Stations, Dépôts
+                Compagnies et Stations
               </p>
             </CardContent>
           </Link>
         </Card>
 
         <Card className="cursor-pointer hover:shadow-md transition-shadow hover:border-primary/50 group">
-          <Link to="/dashboard/sgp">
+          <Link to="/stations">
             <CardContent className="flex flex-col items-center py-6">
               <div className="h-12 w-12 rounded-xl bg-amber-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <TrendingUp className="h-6 w-6 text-amber-600" />
+                <Fuel className="h-6 w-6 text-amber-600" />
               </div>
-              <h4 className="font-medium">Prix & Logistique</h4>
+              <h4 className="font-medium">Réseau Local</h4>
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Configurer les prix officiels et les ordres
+                Suivi des Stocks Stations
               </p>
             </CardContent>
           </Link>
@@ -233,9 +277,9 @@ export default function DashboardSuperAdmin() {
               <div className="h-12 w-12 rounded-xl bg-red-100 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <Shield className="h-6 w-6 text-red-600" />
               </div>
-              <h4 className="font-medium">Centre de Sécurité</h4>
+              <h4 className="font-medium">Alertes</h4>
               <p className="text-xs text-muted-foreground text-center mt-1">
-                Audit logs, Alertes critiques
+                Centre de Vigilance
               </p>
             </CardContent>
           </Link>
@@ -243,14 +287,14 @@ export default function DashboardSuperAdmin() {
       </div>
 
       {/* Technical Monitoring */}
-      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <Server className="h-5 w-5 text-primary" />
-        Monitoring Technique
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-primary">
+        <Server className="h-5 w-5" />
+        Monitoring de l'Infrastructure
       </h3>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle className="text-base">Santé de l'Infrastructure</CardTitle>
+            <CardTitle className="text-base">Santé des Services</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {systemHealth.map((service, index) => (
@@ -260,7 +304,7 @@ export default function DashboardSuperAdmin() {
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
                     <span className="text-sm font-medium">{service.name}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">100%</span>
+                  <span className="text-xs text-muted-foreground">{service.uptime}%</span>
                 </div>
                 <Progress value={service.uptime} className="h-1.5" />
               </div>
@@ -271,15 +315,15 @@ export default function DashboardSuperAdmin() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Carte de Vigilance (Live)</CardTitle>
+              <CardTitle className="text-base font-display">Carte de Vigilance Nationale</CardTitle>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/carte">Plein écran</Link>
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 border-t">
             <div className="h-[300px] w-full">
-              <GuineaMap stations={mockStations} height="100%" showControls={false} />
+              {!loading && <GuineaMap stations={stations} height="100%" showControls={false} />}
             </div>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, AppRole, useAuth } from '@/contexts/AuthContext';
-import { mockEntreprises, mockStations } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 
 const createUserSchema = z.object({
@@ -45,9 +44,11 @@ interface CreateUserDialogProps {
 }
 
 export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUserDialogProps) {
-  const { createUser } = useAuth();
+  const { createUser, role: currentUserRole, profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [entreprises, setEntreprises] = useState<{ id: string, nom: string }[]>([]);
+  const [stations, setStations] = useState<{ id: string, nom: string, entreprise_id: string }[]>([]);
 
   const form = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
@@ -65,17 +66,41 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
   const selectedRole = form.watch('role');
   const selectedEntreprise = form.watch('entrepriseId');
 
+  useEffect(() => {
+    if (open) {
+      fetchData();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    // Si l'utilisateur est un responsable d'entreprise, on fixe son entreprise_id
+    if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
+      form.setValue('entrepriseId', currentUserProfile.entreprise_id);
+      form.setValue('role', 'gestionnaire_station');
+    }
+  }, [currentUserRole, currentUserProfile, open]);
+
+  const fetchData = async () => {
+    try {
+      const { data: entData } = await supabase.from('entreprises').select('id, nom');
+      setEntreprises(entData || []);
+
+      const { data: stData } = await supabase.from('stations').select('id, nom, entreprise_id');
+      setStations(stData || []);
+    } catch (error) {
+      console.error('Error fetching data for dialog:', error);
+    }
+  };
+
   const filteredStations = selectedEntreprise
-    ? mockStations.filter(s => s.entrepriseId === selectedEntreprise)
+    ? stations.filter(s => s.entreprise_id === selectedEntreprise)
     : [];
 
   const onSubmit = async (data: CreateUserForm) => {
     setIsLoading(true);
 
     try {
-      // Utilisation de la fonction createUser du contexte d'authentification
-      // Cette fonction gère la création dans auth.users et l'assignation du rôle
-      const { error, userId } = await createUser({
+      const { error } = await createUser({
         email: data.email,
         password: data.password,
         fullName: data.fullName,
@@ -84,9 +109,7 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
         stationId: data.stationId || undefined,
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Utilisateur créé",
@@ -107,6 +130,16 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
       setIsLoading(false);
     }
   };
+
+  // Filtrage des rôles créables
+  const getAllowedRoles = (): AppRole[] => {
+    if (currentUserRole === 'super_admin') return ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station'];
+    if (currentUserRole === 'admin_etat') return ['inspecteur', 'responsable_entreprise', 'gestionnaire_station'];
+    if (currentUserRole === 'responsable_entreprise') return ['gestionnaire_station'];
+    return [];
+  };
+
+  const allowedRoles = getAllowedRoles();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,12 +208,13 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
               <Select
                 value={form.watch('role')}
                 onValueChange={(value: AppRole) => form.setValue('role', value)}
+                disabled={currentUserRole === 'responsable_entreprise'} // Fixé pour les responsables
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Sélectionner un rôle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(ROLE_LABELS) as AppRole[]).map(role => (
+                  {allowedRoles.map(role => (
                     <SelectItem key={role} value={role}>
                       {ROLE_LABELS[role]}
                     </SelectItem>
@@ -198,12 +232,13 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
                     form.setValue('entrepriseId', value);
                     form.setValue('stationId', '');
                   }}
+                  disabled={currentUserRole === 'responsable_entreprise'} // Fixé pour les responsables
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner une entreprise" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockEntreprises.map(e => (
+                    {entreprises.map(e => (
                       <SelectItem key={e.id} value={e.id}>
                         {e.nom}
                       </SelectItem>

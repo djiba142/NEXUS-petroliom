@@ -46,7 +46,7 @@ const roleColors: Record<AppRole, string> = {
 };
 
 export default function UtilisateursPage() {
-  const { role: currentUserRole } = useAuth();
+  const { role: currentUserRole, profile: currentUserProfile } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -55,13 +55,12 @@ export default function UtilisateursPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [currentUserRole, currentUserProfile?.entreprise_id]);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Fetch profiles with their roles
-      const { data: profiles, error: profilesError } = await supabase
+      let query = supabase
         .from('profiles')
         .select(`
           id,
@@ -72,8 +71,14 @@ export default function UtilisateursPage() {
           created_at,
           entreprise_id,
           station_id
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+      // Filter by company if the user is a Responsable Entreprise
+      if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
+        query = query.eq('entreprise_id', currentUserProfile.entreprise_id);
+      }
+
+      const { data: profiles, error: profilesError } = await query.order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
 
@@ -122,7 +127,7 @@ export default function UtilisateursPage() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
+    const matchesSearch =
       user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
@@ -137,11 +142,11 @@ export default function UtilisateursPage() {
     gestionnaire_station: users.filter(u => u.role === 'gestionnaire_station').length,
   };
 
-  const canCreateUser = currentUserRole === 'super_admin' || currentUserRole === 'admin_etat';
+  const canCreateUser = currentUserRole === 'super_admin' || currentUserRole === 'admin_etat' || currentUserRole === 'responsable_entreprise';
 
   return (
-    <DashboardLayout 
-      title="Utilisateurs" 
+    <DashboardLayout
+      title="Utilisateurs"
       subtitle="Gestion des accès et des rôles"
     >
       {/* Info Banner */}
@@ -191,7 +196,7 @@ export default function UtilisateursPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Select value={selectedRole} onValueChange={setSelectedRole}>
           <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Tous les rôles" />
@@ -243,7 +248,7 @@ export default function UtilisateursPage() {
                         {user.full_name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
                     </Avatar>
-                    
+
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium">{user.full_name}</h3>
@@ -252,7 +257,7 @@ export default function UtilisateursPage() {
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{user.email}</p>
-                      
+
                       {(user.entreprise_nom || user.station_nom) && (
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           {user.entreprise_nom && (
@@ -278,7 +283,7 @@ export default function UtilisateursPage() {
                         Inscrit le {new Date(user.created_at).toLocaleDateString('fr-FR')}
                       </p>
                     </div>
-                    
+
                     {canCreateUser && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -346,8 +351,8 @@ export default function UtilisateursPage() {
       </Card>
 
       {/* Create User Dialog */}
-      <CreateUserDialog 
-        open={createDialogOpen} 
+      <CreateUserDialog
+        open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onUserCreated={fetchUsers}
       />

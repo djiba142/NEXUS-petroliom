@@ -25,8 +25,6 @@ import AccessDeniedPage from "./pages/AccessDeniedPage";
 import NotFound from "./pages/NotFound";
 
 // Role-specific dashboards
-import DashboardSONAP from "./pages/dashboards/DashboardSONAP";
-import DashboardSGP from "./pages/dashboards/DashboardSGP";
 import DashboardEntreprise from "./pages/dashboards/DashboardEntreprise";
 import DashboardStation from "./pages/dashboards/DashboardStation";
 import DashboardSuperAdmin from "./pages/dashboards/DashboardSuperAdmin";
@@ -56,25 +54,9 @@ const App = () => (
               <Route index element={<Index />} />
             </Route>
 
-            <Route path="/dashboard/sonap" element={
-              <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
-              </ProtectedRoute>
-            }>
-              <Route index element={<DashboardSONAP />} />
-            </Route>
-
-            <Route path="/dashboard/sgp" element={
-              <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
-              </ProtectedRoute>
-            }>
-              <Route index element={<DashboardSGP />} />
-            </Route>
-
             <Route path="/dashboard/admin" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin']} />
+                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur']} />
               </ProtectedRoute>
             }>
               <Route index element={<DashboardSuperAdmin />} />

@@ -183,11 +183,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getDashboardRoute = (): string => {
     if (!role) return '/auth';
 
-    // Mapping des rôles vers leurs dashboards respectifs
+    // Mapping consolidé vers trois dashboards principaux
     const dashboardRoutes: Record<AppRole, string> = {
       'super_admin': '/dashboard/admin',
-      'admin_etat': '/dashboard/sonap', // Par défaut SONAP pour admin_etat
-      'inspecteur': '/', // Dashboard général pour inspecteur
+      'admin_etat': '/dashboard/admin', // SONAP utilise le dashboard admin
+      'inspecteur': '/dashboard/admin',  // Inspecteur utilise la vue nationale
       'responsable_entreprise': '/dashboard/entreprise',
       'gestionnaire_station': '/dashboard/station',
     };
@@ -208,9 +208,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createUser = async (params: CreateUserParams): Promise<{ error: Error | null; userId?: string }> => {
     const { email, password, fullName, role: newUserRole, entrepriseId, stationId } = params;
 
-    // Vérification : seul le super_admin peut créer des utilisateurs
-    if (role !== 'super_admin') {
-      return { error: new Error('Seul le super_admin peut créer des utilisateurs') };
+    // Vérification des permissions de création
+    const isSuperAdmin = role === 'super_admin';
+    const isCompanyAdmin = role === 'responsable_entreprise';
+
+    if (!isSuperAdmin && !isCompanyAdmin) {
+      return { error: new Error('Permissions insuffisantes pour créer un utilisateur') };
+    }
+
+    // Un responsable d'entreprise ne peut créer que des gestionnaires de station
+    if (isCompanyAdmin && newUserRole !== 'gestionnaire_station') {
+      return { error: new Error('Un responsable d\'entreprise ne peut créer que des gestionnaires de station') };
+    }
+
+    // Un responsable d'entreprise ne peut créer des utilisateurs que pour SA propre entreprise
+    if (isCompanyAdmin && entrepriseId !== profile?.entreprise_id) {
+      return { error: new Error('Vous ne pouvez créer des utilisateurs que pour votre propre entreprise') };
     }
 
     try {

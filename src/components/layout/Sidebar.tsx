@@ -39,11 +39,9 @@ const navigation: NavItem[] = [
 ];
 
 const dashboardNavigation: NavItem[] = [
-  { name: 'Dashboard SONAP', href: '/dashboard/sonap', icon: Ship, roles: ['super_admin', 'admin_etat'] },
-  { name: 'Dashboard SGP', href: '/dashboard/sgp', icon: Truck, roles: ['super_admin', 'admin_etat'] },
+  { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin', 'admin_etat', 'inspecteur'] },
   { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
   { name: 'Ma Station', href: '/dashboard/station', icon: Fuel, roles: ['gestionnaire_station'] },
-  { name: 'Super Admin', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
 ];
 
 const adminNavigation: NavItem[] = [
