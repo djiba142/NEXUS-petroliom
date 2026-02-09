@@ -16,7 +16,7 @@ import {
   Info,
   Shield
 } from 'lucide-react';
-import logo from '@/assets/logo-nexus.jpg';
+import logo from '@/assets/logo.png';
 import { cn } from '@/lib/utils';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 

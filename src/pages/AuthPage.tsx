@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import logo from '@/assets/logo-nexus.jpg';
+import logo from '@/assets/logo.png';
 
 const loginSchema = z.object({
   email: z.string().email('Email invalide'),
@@ -28,7 +28,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/panel');
     }
   }, [user, navigate]);
 

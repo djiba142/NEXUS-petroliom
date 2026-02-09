@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireRole } from "@/components/RequireRole";
 import Index from "./pages/Index";
+import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import EntreprisesPage from "./pages/EntreprisesPage";
 import EntrepriseDetailPage from "./pages/EntrepriseDetailPage";
@@ -41,11 +42,12 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Public routes */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/acces-refuse" element={<AccessDeniedPage />} />
 
             {/* DASHBOARDS STIRCTS - CHAQUE ROLE A LE SIEN */}
-            <Route path="/" element={
+            <Route path="/panel" element={
               <ProtectedRoute>
                 <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
               </ProtectedRoute>

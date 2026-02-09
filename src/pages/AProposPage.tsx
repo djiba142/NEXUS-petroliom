@@ -1,8 +1,8 @@
-import { 
-  Building2, 
-  Target, 
-  Users, 
-  Shield, 
+import {
+  Building2,
+  Target,
+  Users,
+  Shield,
   BarChart3,
   Fuel,
   Globe,
@@ -12,7 +12,7 @@ import {
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import logoSihg from '@/assets/logo-sihg.png';
+import logoSihg from '@/assets/logo.png';
 
 const stakeholders = [
   {
@@ -93,17 +93,17 @@ const features = [
 
 export default function AProposPage() {
   return (
-    <DashboardLayout 
-      title="À Propos" 
+    <DashboardLayout
+      title="À Propos"
       subtitle="Présentation du Système d'Information des Hydrocarbures de Guinée"
     >
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary/90 to-primary/80 text-primary-foreground p-8 mb-8">
         <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8">
           <div className="flex-shrink-0">
-            <img 
-              src={logoSihg} 
-              alt="Logo SIHG" 
+            <img
+              src={logoSihg}
+              alt="Logo SIHG"
               className="h-32 w-32 object-contain bg-white rounded-2xl p-4"
             />
           </div>
@@ -115,8 +115,8 @@ export default function AProposPage() {
               Système d'Information des Hydrocarbures de Guinée
             </h1>
             <p className="text-lg text-primary-foreground/90 max-w-3xl">
-              Le SIHG est la plateforme nationale de suivi et de gestion des stocks de carburant 
-              en République de Guinée. Elle permet une vision consolidée et en temps réel de 
+              Le SIHG est la plateforme nationale de suivi et de gestion des stocks de carburant
+              en République de Guinée. Elle permet une vision consolidée et en temps réel de
               l'ensemble du secteur pétrolier pour garantir la sécurité énergétique du pays.
             </p>
           </div>
@@ -140,7 +140,7 @@ export default function AProposPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {objectives.map((obj, index) => (
-              <div 
+              <div
                 key={index}
                 className="p-4 rounded-lg bg-secondary/50 border border-border hover:border-primary/30 transition-colors"
               >
@@ -171,7 +171,7 @@ export default function AProposPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {stakeholders.map((stakeholder) => (
-              <div 
+              <div
                 key={stakeholder.id}
                 className="p-5 rounded-xl bg-card border border-border hover:shadow-md transition-all"
               >
@@ -214,7 +214,7 @@ export default function AProposPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {features.map((feature, index) => (
-              <div 
+              <div
                 key={index}
                 className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30"
               >
