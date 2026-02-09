@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Mail, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const LandingFooter = () => {
+    const { user } = useAuth();
     return (
         <footer id="contact" className="bg-[#1e3a8a] pt-20 pb-10 text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -27,7 +29,9 @@ export const LandingFooter = () => {
                             <li><a href="#" className="hover:text-white transition-colors">Accueil</a></li>
                             <li><a href="#services" className="hover:text-white transition-colors">Services</a></li>
                             <li><a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a></li>
-                            <li><Link to="/auth" className="hover:text-white transition-colors">Connexion</Link></li>
+                            <li><Link to={user ? "/panel" : "/auth"} className="hover:text-white transition-colors">
+                                {user ? "Tableau de bord" : "Se connecter"}
+                            </Link></li>
                         </ul>
                     </div>
 

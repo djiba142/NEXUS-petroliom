@@ -4,17 +4,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { RefreshCw } from 'lucide-react';
 
 const Index = () => {
-  const { role, getDashboardRoute, loading } = useAuth();
+  const { role, loading, getDashboardRoute } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!loading) {
-      const route = getDashboardRoute();
-      if (route && route !== '/panel') {
-        navigate(route, { replace: true });
-      }
+      navigate(getDashboardRoute(), { replace: true });
     }
-  }, [role, loading, navigate, getDashboardRoute]);
+  }, [loading, navigate, getDashboardRoute]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4 text-center">

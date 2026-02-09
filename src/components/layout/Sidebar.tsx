@@ -29,24 +29,23 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Tableau de bord', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
-  { name: 'Carte Nationale', href: '/carte', icon: Map, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
-  { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin', 'admin_etat', 'inspecteur'] },
-  { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
-  { name: 'Alertes', href: '/alertes', icon: AlertTriangle, badge: 4, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station'] },
-  { name: 'Rapports', href: '/rapports', icon: FileText, roles: ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise'] },
+  { name: 'Accueil', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
+  { name: 'Carte Nationale', href: '/carte', icon: Map, roles: ['super_admin', 'responsable_entreprise'] },
+  { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin'] },
+  { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'responsable_entreprise'] },
+  { name: 'Alertes', href: '/alertes', icon: AlertTriangle, badge: 4, roles: ['super_admin'] },
+  { name: 'Rapports', href: '/rapports', icon: FileText, roles: ['super_admin'] },
   { name: 'À Propos', href: '/a-propos', icon: Info }, // Visible to all
 ];
 
 const dashboardNavigation: NavItem[] = [
-  { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin', 'admin_etat', 'inspecteur'] },
+  { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
   { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
-  { name: 'Ma Station', href: '/dashboard/station', icon: Fuel, roles: ['gestionnaire_station'] },
 ];
 
 const adminNavigation: NavItem[] = [
-  { name: 'Utilisateurs', href: '/utilisateurs', icon: Users, roles: ['super_admin'] }, // Admin État cannot see this
-  { name: 'Paramètres', href: '/parametres', icon: Settings, roles: ['super_admin', 'admin_etat'] },
+  { name: 'Utilisateurs', href: '/utilisateurs', icon: Users, roles: ['super_admin'] },
+  { name: 'Paramètres', href: '/parametres', icon: Settings, roles: ['super_admin'] },
 ];
 
 export function Sidebar() {

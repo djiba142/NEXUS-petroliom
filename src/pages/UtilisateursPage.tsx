@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, AppRole, useAuth } from '@/contexts/AuthContext';
 import { CreateUserDialog } from '@/components/users/CreateUserDialog';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -33,25 +34,25 @@ interface UserWithDetails {
   phone?: string;
   created_at: string;
   role: AppRole;
+  entreprise_id?: string;
   entreprise_nom?: string;
   station_nom?: string;
 }
 
 const roleColors: Record<AppRole, string> = {
-  super_admin: 'bg-purple-100 text-purple-700 border-purple-200',
-  admin_etat: 'bg-blue-100 text-blue-700 border-blue-200',
-  inspecteur: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  super_admin: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   responsable_entreprise: 'bg-amber-100 text-amber-700 border-amber-200',
-  gestionnaire_station: 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
 export default function UtilisateursPage() {
-  const { role: currentUserRole, profile: currentUserProfile } = useAuth();
+  const { role: currentUserRole, profile: currentUserProfile, deleteUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<UserWithDetails | null>(null);
   const [users, setUsers] = useState<UserWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchUsers();
@@ -112,7 +113,8 @@ export default function UtilisateursPage() {
           email: profile.email,
           phone: profile.phone || undefined,
           created_at: profile.created_at,
-          role: (userRole?.role as AppRole) || 'gestionnaire_station',
+          role: (userRole?.role as AppRole) || 'responsable_entreprise',
+          entreprise_id: profile.entreprise_id || undefined,
           entreprise_nom: entreprise?.nom,
           station_nom: station?.nom,
         };
@@ -136,13 +138,38 @@ export default function UtilisateursPage() {
 
   const usersByRole = {
     super_admin: users.filter(u => u.role === 'super_admin').length,
-    admin_etat: users.filter(u => u.role === 'admin_etat').length,
-    inspecteur: users.filter(u => u.role === 'inspecteur').length,
     responsable_entreprise: users.filter(u => u.role === 'responsable_entreprise').length,
-    gestionnaire_station: users.filter(u => u.role === 'gestionnaire_station').length,
   };
 
-  const canCreateUser = currentUserRole === 'super_admin' || currentUserRole === 'admin_etat' || currentUserRole === 'responsable_entreprise';
+  const canCreateUser = currentUserRole === 'super_admin' || currentUserRole === 'responsable_entreprise';
+
+  const handleEdit = (user: UserWithDetails) => {
+    setUserToEdit(user);
+    setCreateDialogOpen(true);
+  };
+
+  const handleDelete = async (userId: string, name: string) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer l'utilisateur ${name} ?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await deleteUser(userId);
+      if (error) throw error;
+
+      toast({
+        title: "Utilisateur supprimé",
+        description: `L'utilisateur ${name} a été supprimé avec succès.`,
+      });
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: error.message || "Impossible de supprimer l'utilisateur",
+      });
+    }
+  };
 
   return (
     <DashboardLayout
@@ -161,23 +188,10 @@ export default function UtilisateursPage() {
         {(Object.keys(ROLE_LABELS) as AppRole[]).map(role => (
           <Card key={role} className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setSelectedRole(role)}>
             <CardContent className="p-4 text-center">
-              <div className={cn(
-                "inline-flex p-2 rounded-lg mb-2",
-                role === 'super_admin' && 'bg-purple-100',
-                role === 'admin_etat' && 'bg-blue-100',
-                role === 'inspecteur' && 'bg-cyan-100',
-                role === 'responsable_entreprise' && 'bg-amber-100',
-                role === 'gestionnaire_station' && 'bg-emerald-100'
-              )}>
-                <Shield className={cn(
-                  "h-5 w-5",
-                  role === 'super_admin' && 'text-purple-600',
-                  role === 'admin_etat' && 'text-blue-600',
-                  role === 'inspecteur' && 'text-cyan-600',
-                  role === 'responsable_entreprise' && 'text-amber-600',
-                  role === 'gestionnaire_station' && 'text-emerald-600'
-                )} />
-              </div>
+              <Shield className={cn(
+                "h-5 w-5",
+                role === 'super_admin' ? 'text-purple-600' : 'text-amber-600'
+              )} />
               <p className="text-2xl font-bold">{usersByRole[role]}</p>
               <p className="text-xs text-muted-foreground truncate">{ROLE_LABELS[role]}</p>
             </CardContent>
@@ -215,7 +229,10 @@ export default function UtilisateursPage() {
         </Button>
 
         {canCreateUser && (
-          <Button className="gap-2" onClick={() => setCreateDialogOpen(true)}>
+          <Button className="gap-2" onClick={() => {
+            setUserToEdit(null);
+            setCreateDialogOpen(true);
+          }}>
             <Plus className="h-4 w-4" />
             Nouvel utilisateur
           </Button>
@@ -292,12 +309,15 @@ export default function UtilisateursPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem className="gap-2">
+                          <DropdownMenuItem className="gap-2" onClick={() => handleEdit(user)}>
                             <Edit className="h-4 w-4" />
                             Modifier
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive">
+                          <DropdownMenuItem
+                            className="gap-2 text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(user.user_id, user.full_name)}
+                          >
                             <Trash2 className="h-4 w-4" />
                             Supprimer
                           </DropdownMenuItem>
@@ -330,15 +350,11 @@ export default function UtilisateursPage() {
                 <div className="flex flex-col items-center">
                   <div className={cn(
                     "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white",
-                    role === 'super_admin' && 'bg-purple-500',
-                    role === 'admin_etat' && 'bg-blue-500',
-                    role === 'inspecteur' && 'bg-cyan-500',
-                    role === 'responsable_entreprise' && 'bg-amber-500',
-                    role === 'gestionnaire_station' && 'bg-emerald-500'
+                    role === 'super_admin' ? 'bg-purple-500' : 'bg-amber-500'
                   )}>
                     {index + 1}
                   </div>
-                  {index < 4 && <div className="w-0.5 h-8 bg-border" />}
+                  {index < 1 && <div className="w-0.5 h-8 bg-border" />}
                 </div>
                 <div className="flex-1 pt-1">
                   <h4 className="font-medium">{ROLE_LABELS[role]}</h4>
@@ -353,8 +369,19 @@ export default function UtilisateursPage() {
       {/* Create User Dialog */}
       <CreateUserDialog
         open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (!open) setUserToEdit(null);
+        }}
         onUserCreated={fetchUsers}
+        initialData={userToEdit ? {
+          user_id: userToEdit.user_id,
+          email: userToEdit.email,
+          full_name: userToEdit.full_name,
+          role: userToEdit.role,
+          phone: userToEdit.phone,
+          entreprise_id: userToEdit.entreprise_id
+        } : undefined}
       />
     </DashboardLayout>
   );

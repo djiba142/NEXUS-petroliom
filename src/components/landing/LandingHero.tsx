@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight, Globe, ShieldCheck, Radio, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const LandingHero = () => {
+    const { user } = useAuth();
     return (
         <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-[800px] h-[800px] bg-blue-100/50 rounded-full blur-3xl -z-10" />
@@ -25,8 +27,8 @@ export const LandingHero = () => {
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <Button size="lg" className="bg-[#1e3a8a] text-white hover:bg-[#1e3a8a]/90 px-10 h-14 rounded-xl text-lg group" asChild>
-                                <Link to="/auth">
-                                    Démarrer maintenant <ChevronRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                                <Link to={user ? "/panel" : "/auth"}>
+                                    {user ? "Tableau de bord" : "Démarrer maintenant"} <ChevronRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </Button>
                             <Button size="lg" variant="outline" className="px-10 h-14 rounded-xl border-slate-200 text-lg hover:bg-slate-50">

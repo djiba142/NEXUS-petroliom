@@ -47,8 +47,6 @@ export default function StationsPage() {
 
       if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
         query = query.eq('entreprise_id', currentUserProfile.entreprise_id);
-      } else if (currentUserRole === 'gestionnaire_station' && currentUserProfile?.station_id) {
-        query = query.eq('id', currentUserProfile.station_id);
       }
 
       const { data: stData, error: stError } = await query;
@@ -183,7 +181,7 @@ export default function StationsPage() {
           </SelectContent>
         </Select>
 
-        {(currentUserRole === 'super_admin' || currentUserRole === 'admin_etat') && (
+        {currentUserRole === 'super_admin' && (
           <Select value={selectedEntreprise} onValueChange={setSelectedEntreprise}>
             <SelectTrigger className="w-full sm:w-[200px]">
               <SelectValue placeholder="Entreprise" />

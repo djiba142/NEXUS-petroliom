@@ -25,43 +25,71 @@ import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, AppRole, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-const createUserSchema = z.object({
+const userSchema = z.object({
   email: z.string().email('Email invalide'),
-  password: z.string().min(8, 'Mot de passe doit contenir au moins 8 caractères'),
+  password: z.string().min(8, 'Mot de passe doit contenir au moins 8 caractères').optional().or(z.literal('')),
   fullName: z.string().min(2, 'Nom complet requis'),
-  role: z.enum(['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']),
+  role: z.enum(['super_admin', 'responsable_entreprise']),
   phone: z.string().optional(),
   entrepriseId: z.string().optional(),
-  stationId: z.string().optional(),
 });
 
-type CreateUserForm = z.infer<typeof createUserSchema>;
+type UserFormValues = z.infer<typeof userSchema>;
 
 interface CreateUserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUserCreated?: () => void;
+  initialData?: {
+    user_id: string;
+    email: string;
+    full_name: string;
+    role: AppRole;
+    phone?: string;
+    entreprise_id?: string;
+  };
 }
 
-export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUserDialogProps) {
-  const { createUser, role: currentUserRole, profile: currentUserProfile } = useAuth();
+export function CreateUserDialog({ open, onOpenChange, onUserCreated, initialData }: CreateUserDialogProps) {
+  const { createUser, updateUser, role: currentUserRole, profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [entreprises, setEntreprises] = useState<{ id: string, nom: string }[]>([]);
-  const [stations, setStations] = useState<{ id: string, nom: string, entreprise_id: string }[]>([]);
+  const isEditMode = !!initialData;
 
-  const form = useForm<CreateUserForm>({
-    resolver: zodResolver(createUserSchema),
+  const form = useForm<UserFormValues>({
+    resolver: zodResolver(userSchema),
     defaultValues: {
       email: '',
       password: '',
       fullName: '',
-      role: 'gestionnaire_station',
+      role: 'responsable_entreprise',
       phone: '',
       entrepriseId: '',
-      stationId: '',
     },
   });
+
+  useEffect(() => {
+    if (open && initialData) {
+      form.reset({
+        email: initialData.email,
+        fullName: initialData.full_name,
+        role: initialData.role,
+        phone: initialData.phone || '',
+        entrepriseId: initialData.entreprise_id || '',
+        password: '', // Keep empty when editing
+      });
+    } else if (open && !initialData) {
+      form.reset({
+        email: '',
+        password: '',
+        fullName: '',
+        role: 'responsable_entreprise',
+        phone: '',
+        entrepriseId: '',
+      });
+    }
+  }, [open, initialData, form]);
 
   const selectedRole = form.watch('role');
   const selectedEntreprise = form.watch('entrepriseId');
@@ -76,7 +104,7 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
     // Si l'utilisateur est un responsable d'entreprise, on fixe son entreprise_id
     if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
       form.setValue('entrepriseId', currentUserProfile.entreprise_id);
-      form.setValue('role', 'gestionnaire_station');
+      form.setValue('role', 'responsable_entreprise');
     }
   }, [currentUserRole, currentUserProfile, open]);
 
@@ -84,47 +112,53 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
     try {
       const { data: entData } = await supabase.from('entreprises').select('id, nom');
       setEntreprises(entData || []);
-
-      const { data: stData } = await supabase.from('stations').select('id, nom, entreprise_id');
-      setStations(stData || []);
     } catch (error) {
       console.error('Error fetching data for dialog:', error);
     }
   };
 
-  const filteredStations = selectedEntreprise
-    ? stations.filter(s => s.entreprise_id === selectedEntreprise)
-    : [];
-
-  const onSubmit = async (data: CreateUserForm) => {
+  const onSubmit = async (data: UserFormValues) => {
     setIsLoading(true);
 
     try {
-      const { error } = await createUser({
-        email: data.email,
-        password: data.password,
-        fullName: data.fullName,
-        role: data.role,
-        entrepriseId: data.entrepriseId || undefined,
-        stationId: data.stationId || undefined,
-      });
+      if (isEditMode && initialData) {
+        const { error } = await updateUser(initialData.user_id, {
+          email: data.email,
+          fullName: data.fullName,
+          role: data.role,
+          entrepriseId: data.entrepriseId || undefined,
+        });
+        if (error) throw error;
 
-      if (error) throw error;
+        toast({
+          title: "Utilisateur mis à jour",
+          description: `Le compte de ${data.fullName} a été modifié avec succès.`,
+        });
+      } else {
+        const { error } = await createUser({
+          email: data.email,
+          password: data.password || '',
+          fullName: data.fullName,
+          role: data.role,
+          entrepriseId: data.entrepriseId || undefined,
+        });
+        if (error) throw error;
 
-      toast({
-        title: "Utilisateur créé",
-        description: `Le compte de ${data.fullName} (${data.email}) a été créé avec succès.`,
-      });
+        toast({
+          title: "Utilisateur créé",
+          description: `Le compte de ${data.fullName} (${data.email}) a été créé avec succès.`,
+        });
+      }
 
       form.reset();
       onOpenChange(false);
       onUserCreated?.();
     } catch (error: any) {
-      console.error('Error creating user:', error);
+      console.error('Error saving user:', error);
       toast({
         variant: "destructive",
         title: "Erreur",
-        description: error.message || "Impossible de créer l'utilisateur",
+        description: error.message || "Impossible d'enregistrer l'utilisateur",
       });
     } finally {
       setIsLoading(false);
@@ -133,9 +167,8 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
 
   // Filtrage des rôles créables
   const getAllowedRoles = (): AppRole[] => {
-    if (currentUserRole === 'super_admin') return ['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station'];
-    if (currentUserRole === 'admin_etat') return ['inspecteur', 'responsable_entreprise', 'gestionnaire_station'];
-    if (currentUserRole === 'responsable_entreprise') return ['gestionnaire_station'];
+    if (currentUserRole === 'super_admin') return ['super_admin', 'responsable_entreprise'];
+    if (currentUserRole === 'responsable_entreprise') return ['responsable_entreprise'];
     return [];
   };
 
@@ -147,10 +180,12 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Créer un utilisateur
+            {isEditMode ? 'Modifier l\'utilisateur' : 'Créer un utilisateur'}
           </DialogTitle>
           <DialogDescription>
-            Créer un nouveau compte utilisateur avec un rôle spécifique.
+            {isEditMode
+              ? `Modification des informations de ${initialData.full_name}.`
+              : 'Créer un nouveau compte utilisateur avec un rôle spécifique.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -190,24 +225,26 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
               />
             </div>
 
-            <div className="col-span-2 space-y-2">
-              <Label htmlFor="password">Mot de passe *</Label>
-              <Input
-                id="password"
-                type="password"
-                {...form.register('password')}
-                placeholder="Minimum 8 caractères"
-              />
-              {form.formState.errors.password && (
-                <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
-              )}
-            </div>
+            {!isEditMode && (
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="password">Mot de passe *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  {...form.register('password')}
+                  placeholder="Minimum 8 caractères"
+                />
+                {form.formState.errors.password && (
+                  <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
+                )}
+              </div>
+            )}
 
             <div className="col-span-2 space-y-2">
               <Label htmlFor="role">Rôle *</Label>
               <Select
                 value={form.watch('role')}
-                onValueChange={(value: AppRole) => form.setValue('role', value)}
+                onValueChange={(value) => form.setValue('role', value as AppRole)}
                 disabled={currentUserRole === 'responsable_entreprise'} // Fixé pour les responsables
               >
                 <SelectTrigger>
@@ -223,16 +260,15 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
               </Select>
             </div>
 
-            {(selectedRole === 'responsable_entreprise' || selectedRole === 'gestionnaire_station') && (
+            {selectedRole === 'responsable_entreprise' && (
               <div className="col-span-2 space-y-2">
                 <Label htmlFor="entrepriseId">Entreprise</Label>
                 <Select
                   value={form.watch('entrepriseId')}
                   onValueChange={(value) => {
                     form.setValue('entrepriseId', value);
-                    form.setValue('stationId', '');
                   }}
-                  disabled={currentUserRole === 'responsable_entreprise'} // Fixé pour les responsables
+                  disabled={currentUserRole === 'responsable_entreprise'}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner une entreprise" />
@@ -247,27 +283,6 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
                 </Select>
               </div>
             )}
-
-            {selectedRole === 'gestionnaire_station' && selectedEntreprise && (
-              <div className="col-span-2 space-y-2">
-                <Label htmlFor="stationId">Station</Label>
-                <Select
-                  value={form.watch('stationId')}
-                  onValueChange={(value) => form.setValue('stationId', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une station" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredStations.map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.nom}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
 
           <DialogFooter>
@@ -276,7 +291,7 @@ export function CreateUserDialog({ open, onOpenChange, onUserCreated }: CreateUs
             </Button>
             <Button type="submit" disabled={isLoading} className="gap-2">
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Créer l'utilisateur
+              {isEditMode ? 'Enregistrer les modifications' : 'Créer l\'utilisateur'}
             </Button>
           </DialogFooter>
         </form>

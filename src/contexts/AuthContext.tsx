@@ -3,9 +3,10 @@ import { User, Session, createClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 // Types de rôles disponibles dans l'application
-export type AppRole = 'super_admin' | 'admin_etat' | 'inspecteur' | 'responsable_entreprise' | 'gestionnaire_station';
+export type AppRole = 'super_admin' | 'responsable_entreprise';
 
 // Interface du profil utilisateur
+// ... (interface continues)
 interface Profile {
   id: string;
   user_id: string;
@@ -39,6 +40,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   canAccess: (requiredRole: AppRole) => boolean;
   createUser: (params: CreateUserParams) => Promise<{ error: Error | null; userId?: string }>;
+  updateUser: (userId: string, params: Partial<CreateUserParams>) => Promise<{ error: Error | null }>;
+  deleteUser: (userId: string) => Promise<{ error: Error | null }>;
   getDashboardRoute: () => string;
 }
 
@@ -46,10 +49,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const ROLE_HIERARCHY: Record<AppRole, number> = {
   'super_admin': 1,
-  'admin_etat': 2,
-  'inspecteur': 3,
-  'responsable_entreprise': 4,
-  'gestionnaire_station': 5,
+  'responsable_entreprise': 2,
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -183,16 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getDashboardRoute = (): string => {
     if (!role) return '/auth';
 
-    // Mapping consolidé vers trois dashboards principaux
-    const dashboardRoutes: Record<AppRole, string> = {
-      'super_admin': '/dashboard/admin',
-      'admin_etat': '/dashboard/admin', // SONAP utilise le dashboard admin
-      'inspecteur': '/dashboard/admin',  // Inspecteur utilise la vue nationale
-      'responsable_entreprise': '/dashboard/entreprise',
-      'gestionnaire_station': '/dashboard/station',
-    };
-
-    return dashboardRoutes[role];
+    if (role === 'super_admin') return '/dashboard/admin';
+    return '/dashboard/entreprise';
   };
 
   /**
@@ -214,11 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!isSuperAdmin && !isCompanyAdmin) {
       return { error: new Error('Permissions insuffisantes pour créer un utilisateur') };
-    }
-
-    // Un responsable d'entreprise ne peut créer que des gestionnaires de station
-    if (isCompanyAdmin && newUserRole !== 'gestionnaire_station') {
-      return { error: new Error('Un responsable d\'entreprise ne peut créer que des gestionnaires de station') };
     }
 
     // Un responsable d'entreprise ne peut créer des utilisateurs que pour SA propre entreprise
@@ -310,6 +297,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Met à jour un utilisateur existant (réservé au super_admin)
+   */
+  const updateUser = async (userId: string, params: Partial<CreateUserParams>): Promise<{ error: Error | null }> => {
+    try {
+      if (role !== 'super_admin') {
+        throw new Error('Seul le Super Administrateur peut modifier des utilisateurs');
+      }
+
+      const { fullName, email, role: newUserRole, entrepriseId } = params;
+
+      // 1. Mettre à jour le profil
+      const profileUpdates: any = {};
+      if (fullName) profileUpdates.full_name = fullName;
+      if (email) profileUpdates.email = email;
+      if (entrepriseId !== undefined) profileUpdates.entreprise_id = entrepriseId;
+
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('user_id', userId);
+
+        if (profileError) throw profileError;
+      }
+
+      // 2. Mettre à jour le rôle si fourni
+      if (newUserRole) {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .update({ role: newUserRole })
+          .eq('user_id', userId);
+
+        if (roleError) throw roleError;
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de l\'utilisateur:', error);
+      return { error: error as Error };
+    }
+  };
+
+  /**
+   * Supprime un utilisateur (réservé au super_admin)
+   */
+  const deleteUser = async (userId: string): Promise<{ error: Error | null }> => {
+    try {
+      if (role !== 'super_admin') {
+        throw new Error('Seul le Super Administrateur peut supprimer des utilisateurs');
+      }
+
+      // 1. Supprimer de user_roles (la FK est sur user_id)
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (roleError) throw roleError;
+
+      // 2. Supprimer de profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('user_id', userId);
+
+      if (profileError) throw profileError;
+
+      // Note: On ne peut pas supprimer de auth.users directement depuis le client sans clé service_role.
+      // Dans une version de production, il faudrait appeler une Edge Function qui utilise l'admin API.
+
+      return { error: null };
+    } catch (error) {
+      console.error('Erreur lors de la suppression de l\'utilisateur:', error);
+      return { error: error as Error };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -322,6 +387,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       canAccess,
       createUser,
+      updateUser,
+      deleteUser,
       getDashboardRoute,
     }}>
       {children}
@@ -338,17 +405,11 @@ export function useAuth() {
 }
 
 export const ROLE_LABELS: Record<AppRole, string> = {
-  'super_admin': 'Super Administrateur',
-  'admin_etat': 'Admin État (DNH)',
-  'inspecteur': 'Inspecteur',
+  'super_admin': 'Super Administrateur (SONAP)',
   'responsable_entreprise': 'Responsable Entreprise',
-  'gestionnaire_station': 'Gestionnaire Station',
 };
 
 export const ROLE_DESCRIPTIONS: Record<AppRole, string> = {
-  'super_admin': 'Accès complet à la plateforme technique et gestion des permissions',
-  'admin_etat': 'Supervision nationale, validation des entités et fixation des prix officiels',
-  'inspecteur': 'Consultation des données et observations de terrain',
-  'responsable_entreprise': 'Gestion de la flotte de stations de son entreprise',
-  'gestionnaire_station': 'Saisie quotidienne des stocks et réceptions de livraisons',
+  'super_admin': 'Accès complet à la plateforme nationale et gestion du système',
+  'responsable_entreprise': 'Gestion des stations et des stocks de son entreprise',
 };

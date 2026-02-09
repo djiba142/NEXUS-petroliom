@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { 
-  Settings, 
-  Bell, 
-  Shield, 
-  Palette, 
+import {
+  Settings,
+  Bell,
+  Shield,
+  Palette,
   Database,
   Globe,
   DollarSign,
@@ -24,14 +24,14 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function ParametresPage() {
   const { toast } = useToast();
   const { role } = useAuth();
-  
+
   const [prixEssence, setPrixEssence] = useState('12000');
   const [prixGasoil, setPrixGasoil] = useState('12000');
   const [prixGPL, setPrixGPL] = useState('8500');
-  
+
   const [seuilCritique, setSeuilCritique] = useState('10');
   const [seuilAlerte, setSeuilAlerte] = useState('25');
-  
+
   const [notifications, setNotifications] = useState({
     email: true,
     sms: false,
@@ -56,8 +56,8 @@ export default function ParametresPage() {
   };
 
   return (
-    <DashboardLayout 
-      title="Paramètres" 
+    <DashboardLayout
+      title="Paramètres"
       subtitle="Configuration de la plateforme SIHG"
     >
       <Tabs defaultValue="general" className="space-y-6">
@@ -171,7 +171,7 @@ export default function ParametresPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {role !== 'super_admin' && role !== 'admin_etat' ? (
+              {role !== 'super_admin' ? (
                 <div className="text-center py-8">
                   <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">
@@ -294,9 +294,9 @@ export default function ParametresPage() {
                       Recevoir les alertes par email
                     </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.email}
-                    onCheckedChange={(checked) => setNotifications({...notifications, email: checked})}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, email: checked })}
                   />
                 </div>
                 <Separator />
@@ -307,9 +307,9 @@ export default function ParametresPage() {
                       Recevoir les alertes par SMS
                     </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.sms}
-                    onCheckedChange={(checked) => setNotifications({...notifications, sms: checked})}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, sms: checked })}
                   />
                 </div>
                 <Separator />
@@ -320,9 +320,9 @@ export default function ParametresPage() {
                       Alertes dans le navigateur
                     </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={notifications.push}
-                    onCheckedChange={(checked) => setNotifications({...notifications, push: checked})}
+                    onCheckedChange={(checked) => setNotifications({ ...notifications, push: checked })}
                   />
                 </div>
               </CardContent>
@@ -362,9 +362,9 @@ export default function ParametresPage() {
                   </p>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div className="flex items-center gap-4">
                 <Button variant="outline" className="gap-2">
                   <RefreshCw className="h-4 w-4" />

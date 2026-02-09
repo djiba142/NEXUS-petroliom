@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { 
-  Fuel, 
-  TrendingUp, 
-  TrendingDown, 
-  Package, 
+import {
+  Fuel,
+  TrendingUp,
+  TrendingDown,
+  Package,
   AlertTriangle,
   BarChart3,
   MapPin,
@@ -22,6 +22,26 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { mockStations } from '@/data/mockData';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { Clock, Plus, History } from 'lucide-react';
 
 interface Station {
   id: string;
@@ -50,10 +70,21 @@ interface Entreprise {
 }
 
 export default function DashboardEntreprise() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
   const [stations, setStations] = useState<Station[]>([]);
+  const [livraisons, setLivraisons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const [newLivraison, setNewLivraison] = useState({
+    station_id: '',
+    carburant: '',
+    quantite: '',
+    bon_livraison: '',
+  });
 
   useEffect(() => {
     if (profile?.entreprise_id) {
@@ -84,10 +115,81 @@ export default function DashboardEntreprise() {
 
       if (stationsError) throw stationsError;
       setStations(stationsData || []);
+
+      // Fetch recent livraisons for company stations
+      if (stationsData && stationsData.length > 0) {
+        const stationIds = stationsData.map(s => s.id);
+        const { data: livraisonsData } = await supabase
+          .from('livraisons')
+          .select('*, station:stations(nom)')
+          .in('station_id', stationIds)
+          .order('date_livraison', { ascending: false })
+          .limit(10);
+
+        setLivraisons(livraisonsData || []);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitLivraison = async () => {
+    if (!newLivraison.station_id || !newLivraison.carburant || !newLivraison.quantite) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez remplir tous les champs obligatoires",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const selectedStation = stations.find(s => s.id === newLivraison.station_id);
+      if (!selectedStation) throw new Error("Station non trouvée");
+
+      // 1. Record delivery
+      const { error: livraisonError } = await supabase
+        .from('livraisons')
+        .insert({
+          station_id: newLivraison.station_id,
+          carburant: newLivraison.carburant,
+          quantite: parseInt(newLivraison.quantite),
+          bon_livraison: newLivraison.bon_livraison || null,
+          created_by: user?.id,
+          statut: 'confirme'
+        });
+
+      if (livraisonError) throw livraisonError;
+
+      // 2. Update stock
+      const stockField = `stock_${newLivraison.carburant}`;
+      const currentStock = (selectedStation as any)[stockField] || 0;
+      const { error: updateError } = await supabase
+        .from('stations')
+        .update({ [stockField]: currentStock + parseInt(newLivraison.quantite) })
+        .eq('id', newLivraison.station_id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Livraison enregistrée",
+        description: "Le stock a été mis à jour avec succès.",
+      });
+
+      setIsDialogOpen(false);
+      setNewLivraison({ station_id: '', carburant: '', quantite: '', bon_livraison: '' });
+      fetchData();
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'enregistrer la livraison",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -96,10 +198,10 @@ export default function DashboardEntreprise() {
     return Math.round((stock / capacity) * 100);
   };
 
-  const totalCapaciteEssence = stations.reduce((acc, s) => acc + s.capacite_essence, 0);
-  const totalCapaciteGasoil = stations.reduce((acc, s) => acc + s.capacite_gasoil, 0);
-  const totalStockEssence = stations.reduce((acc, s) => acc + s.stock_essence, 0);
-  const totalStockGasoil = stations.reduce((acc, s) => acc + s.stock_gasoil, 0);
+  const totalCapaciteEssence = stations.reduce((acc, s) => acc + (s.capacite_essence || 0), 0);
+  const totalCapaciteGasoil = stations.reduce((acc, s) => acc + (s.capacite_gasoil || 0), 0);
+  const totalStockEssence = stations.reduce((acc, s) => acc + (s.stock_essence || 0), 0);
+  const totalStockGasoil = stations.reduce((acc, s) => acc + (s.stock_gasoil || 0), 0);
 
   const stationsAlerte = stations.filter(s => {
     const essencePercent = getStockPercentage(s.stock_essence, s.capacite_essence);
@@ -148,8 +250,8 @@ export default function DashboardEntreprise() {
 
   if (!entreprise) {
     return (
-      <DashboardLayout 
-        title="Dashboard Entreprise" 
+      <DashboardLayout
+        title="Dashboard Entreprise"
         subtitle="Aucune entreprise assignée"
       >
         <Card>
@@ -157,7 +259,7 @@ export default function DashboardEntreprise() {
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Aucune entreprise assignée</h3>
             <p className="text-muted-foreground text-center max-w-md">
-              Votre compte n'est pas encore lié à une entreprise. 
+              Votre compte n'est pas encore lié à une entreprise.
               Veuillez contacter un administrateur pour être assigné à votre entreprise.
             </p>
           </CardContent>
@@ -167,7 +269,7 @@ export default function DashboardEntreprise() {
   }
 
   return (
-    <DashboardLayout 
+    <DashboardLayout
       title={`Dashboard ${entreprise.sigle}`}
       subtitle={`Gestion des stations ${entreprise.nom}`}
     >
@@ -176,8 +278,8 @@ export default function DashboardEntreprise() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {entreprise.logo_url ? (
-              <img 
-                src={entreprise.logo_url} 
+              <img
+                src={entreprise.logo_url}
                 alt={entreprise.sigle}
                 className="h-16 w-16 rounded-xl bg-white p-2 object-contain"
               />
@@ -193,9 +295,88 @@ export default function DashboardEntreprise() {
               </p>
             </div>
           </div>
-          <div className="hidden md:block text-right">
-            <p className="text-3xl font-bold">{stations.length}</p>
-            <p className="text-sm text-primary-foreground/80">stations actives</p>
+          <div className="hidden md:flex items-center gap-4 text-right">
+            <div>
+              <p className="text-3xl font-bold">{stations.length}</p>
+              <p className="text-sm text-primary-foreground/80">stations actives</p>
+            </div>
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="bg-white/10 border-white/20 hover:bg-white/20 text-white gap-2">
+                  <Plus className="h-4 w-4" />
+                  Ravitaillement
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Enregistrer une Livraison</DialogTitle>
+                  <DialogDescription>
+                    Mise à jour directe du stock pour une de vos stations.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="station">Station *</Label>
+                    <Select
+                      value={newLivraison.station_id}
+                      onValueChange={(v) => setNewLivraison({ ...newLivraison, station_id: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choisir la station" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stations.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="carburant">Carburant *</Label>
+                      <Select
+                        value={newLivraison.carburant}
+                        onValueChange={(v) => setNewLivraison({ ...newLivraison, carburant: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="essence">Essence</SelectItem>
+                          <SelectItem value="gasoil">Gasoil</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="quantite">Quantité (L) *</Label>
+                      <Input
+                        id="quantite"
+                        type="number"
+                        placeholder="Ex: 10000"
+                        value={newLivraison.quantite}
+                        onChange={(e) => setNewLivraison({ ...newLivraison, quantite: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="bon">Bon de Livraison</Label>
+                    <Input
+                      id="bon"
+                      placeholder="N° BL"
+                      value={newLivraison.bon_livraison}
+                      onChange={(e) => setNewLivraison({ ...newLivraison, bon_livraison: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Annuler</Button>
+                  <Button onClick={handleSubmitLivraison} disabled={submitting}>
+                    {submitting ? "Enregistrement..." : "Confirmer la réception"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
@@ -245,10 +426,10 @@ export default function DashboardEntreprise() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <GuineaMap 
-                stations={mapStations.length > 0 ? mapStations : mockStations.slice(0, 3)} 
-                height="350px" 
-                showControls={false} 
+              <GuineaMap
+                stations={mapStations.length > 0 ? mapStations : mockStations.slice(0, 3)}
+                height="350px"
+                showControls={false}
               />
             </CardContent>
           </Card>
@@ -271,7 +452,7 @@ export default function DashboardEntreprise() {
               stations.slice(0, 5).map((station) => {
                 const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
                 const gasoilPercent = getStockPercentage(station.stock_gasoil, station.capacite_gasoil);
-                
+
                 return (
                   <div key={station.id} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -284,8 +465,8 @@ export default function DashboardEntreprise() {
                           <span className="text-amber-600">Essence</span>
                           <span>{essencePercent}%</span>
                         </div>
-                        <Progress 
-                          value={essencePercent} 
+                        <Progress
+                          value={essencePercent}
                           className={`h-1.5 ${essencePercent < 25 ? '[&>div]:bg-red-500' : '[&>div]:bg-amber-500'}`}
                         />
                       </div>
@@ -294,8 +475,8 @@ export default function DashboardEntreprise() {
                           <span className="text-emerald-600">Gasoil</span>
                           <span>{gasoilPercent}%</span>
                         </div>
-                        <Progress 
-                          value={gasoilPercent} 
+                        <Progress
+                          value={gasoilPercent}
                           className={`h-1.5 ${gasoilPercent < 25 ? '[&>div]:bg-red-500' : '[&>div]:bg-emerald-500'}`}
                         />
                       </div>
@@ -316,7 +497,7 @@ export default function DashboardEntreprise() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <StockEvolutionChart title="Évolution des Stocks" />
-        
+
         {/* Alerts */}
         <Card>
           <CardHeader>
@@ -348,9 +529,9 @@ export default function DashboardEntreprise() {
                 {stationsAlerte.map((station) => {
                   const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
                   const gasoilPercent = getStockPercentage(station.stock_gasoil, station.capacite_gasoil);
-                  
+
                   return (
-                    <div 
+                    <div
                       key={station.id}
                       className="p-3 rounded-lg bg-red-50 border border-red-200"
                     >
@@ -378,6 +559,48 @@ export default function DashboardEntreprise() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Deliveries log */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-primary" />
+                  Ravitaillements Récents
+                </CardTitle>
+                <CardDescription>
+                  Dernières réceptions de stock
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {livraisons.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-20" />
+                <p className="text-muted-foreground">Aucun ravitaillement récent</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {livraisons.map((liv) => (
+                  <div key={liv.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold">{(liv as any).station?.nom || 'Station'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(liv.date_livraison).toLocaleDateString()} • {liv.carburant}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-primary">+{liv.quantite.toLocaleString()} L</span>
+                      {liv.bon_livraison && <p className="text-[10px] text-muted-foreground">BL: {liv.bon_livraison}</p>}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>

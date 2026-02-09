@@ -26,7 +26,6 @@ import NotFound from "./pages/NotFound";
 
 // Role-specific dashboards
 import DashboardEntreprise from "./pages/dashboards/DashboardEntreprise";
-import DashboardStation from "./pages/dashboards/DashboardStation";
 import DashboardSuperAdmin from "./pages/dashboards/DashboardSuperAdmin";
 
 const queryClient = new QueryClient();
@@ -47,7 +46,7 @@ const App = () => (
             {/* DASHBOARDS STIRCTS - CHAQUE ROLE A LE SIEN */}
             <Route path="/panel" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               {/* Redirection intelligente gérée par le composant Index ou AuthContext */}
@@ -56,7 +55,7 @@ const App = () => (
 
             <Route path="/dashboard/admin" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur']} />
+                <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
               <Route index element={<DashboardSuperAdmin />} />
@@ -70,30 +69,22 @@ const App = () => (
               <Route index element={<DashboardEntreprise />} />
             </Route>
 
-            <Route path="/dashboard/station" element={
-              <ProtectedRoute>
-                <RequireRole allowedRoles={['gestionnaire_station']} />
-              </ProtectedRoute>
-            }>
-              <Route index element={<DashboardStation />} />
-            </Route>
-
 
             {/* FONCTIONNALITÉS PARTAGÉES MAIS RESTREINTES */}
 
-            {/* Carte : Tout le monde sauf gestionnaire station (qui ne voit que sa station) */}
+            {/* Carte : Tout le monde */}
             <Route path="/carte" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<CartePage />} />
             </Route>
 
-            {/* Entreprises : Admin, Inspecteur seulemnent */}
+            {/* Entreprises : Admin seulemnent */}
             <Route path="/entreprises" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur']} />
+                <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
               <Route index element={<EntreprisesPage />} />
@@ -101,7 +92,7 @@ const App = () => (
 
             <Route path="/entreprises/:id" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<EntrepriseDetailPage />} />
@@ -110,7 +101,7 @@ const App = () => (
             {/* Stations : Tout le monde a un accès, mais la vue changera selon le rôle */}
             <Route path="/stations" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<StationsPage />} />
@@ -118,7 +109,7 @@ const App = () => (
 
             <Route path="/stations/:id" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<StationDetailPage />} />
@@ -127,25 +118,25 @@ const App = () => (
             {/* Alertes : Tout le monde */}
             <Route path="/alertes" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise', 'gestionnaire_station']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<AlertesPage />} />
             </Route>
 
-            {/* Rapports : Admin, Inspecteur, Entreprise */}
+            {/* Rapports : Admin, Entreprise */}
             <Route path="/rapports" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat', 'inspecteur', 'responsable_entreprise']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<RapportsPage />} />
             </Route>
 
-            {/* ADMINISTRATION SYSTEME - STRICTEMENT SUPER ADMIN & ADMIN ETAT */}
+            {/* ADMINISTRATION SYSTEME - STRICTEMENT SUPER ADMIN */}
             <Route path="/utilisateurs" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin']} />
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
               <Route index element={<UtilisateursPage />} />
@@ -153,7 +144,7 @@ const App = () => (
 
             <Route path="/parametres" element={
               <ProtectedRoute>
-                <RequireRole allowedRoles={['super_admin', 'admin_etat']} />
+                <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
               <Route index element={<ParametresPage />} />
