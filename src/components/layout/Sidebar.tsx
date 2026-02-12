@@ -34,7 +34,7 @@ const navigation: NavItem[] = [
   { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin'] },
   { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'responsable_entreprise'] },
   { name: 'Alertes', href: '/alertes', icon: AlertTriangle, badge: 4, roles: ['super_admin'] },
-  { name: 'Rapports', href: '/rapports', icon: FileText, roles: ['super_admin'] },
+  { name: 'Rapports', href: '/rapports', icon: FileText, roles: ['super_admin', 'responsable_entreprise'] },
   { name: 'À Propos', href: '/a-propos', icon: Info }, // Visible to all
 ];
 

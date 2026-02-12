@@ -445,9 +445,15 @@ export default function DashboardEntreprise() {
           </CardHeader>
           <CardContent className="space-y-4">
             {stations.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">
-                Aucune station enregistrée
-              </p>
+              <div className="text-center py-4 space-y-3">
+                <p className="text-muted-foreground">Aucune station enregistrée</p>
+                <Button variant="outline" className="gap-2" asChild>
+                  <Link to="/stations">
+                    <Plus className="h-4 w-4" />
+                    Ajouter une station
+                  </Link>
+                </Button>
+              </div>
             ) : (
               stations.slice(0, 5).map((station) => {
                 const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
@@ -490,6 +496,12 @@ export default function DashboardEntreprise() {
                 <Link to="/stations">Voir toutes les stations</Link>
               </Button>
             )}
+            <Button variant="outline" className="w-full mt-2 gap-2" asChild>
+              <Link to="/stations">
+                <Plus className="h-4 w-4" />
+                Ajouter une station
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

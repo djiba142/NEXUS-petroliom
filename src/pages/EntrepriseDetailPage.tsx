@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   Building2, 
@@ -9,21 +10,25 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  ArrowLeft
+  ArrowLeft,
+  Loader2
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockEntreprises, mockStations, mockAlerts } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import type { Entreprise, Station, Alert } from '@/types';
 
 const getStockPercentage = (current: number, capacity: number) => {
+  if (capacity <= 0) return 0;
   return Math.round((current / capacity) * 100);
 };
 
 const getStockLevel = (current: number, capacity: number) => {
+  if (capacity <= 0) return 'healthy';
   const percentage = (current / capacity) * 100;
   if (percentage <= 15) return 'critical';
   if (percentage <= 30) return 'warning';
@@ -59,11 +64,121 @@ const stationStatusLabels = {
 
 export default function EntrepriseDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const { data: entData, error: entErr } = await supabase
+          .from('entreprises')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle();
+        if (entErr) throw entErr;
+        if (!entData) {
+          setEntreprise(null);
+          setLoading(false);
+          return;
+        }
+        setEntreprise({
+          id: entData.id,
+          nom: entData.nom,
+          sigle: entData.sigle,
+          type: entData.type as 'compagnie' | 'distributeur',
+          numeroAgrement: entData.numero_agrement,
+          region: entData.region,
+          statut: entData.statut as 'actif' | 'suspendu' | 'ferme',
+          nombreStations: 0,
+          logo: entData.logo_url ?? undefined,
+          contact: {
+            nom: entData.contact_nom || 'N/A',
+            telephone: entData.contact_telephone || '',
+            email: entData.contact_email || '',
+          },
+        });
+
+        const { data: stData, error: stErr } = await supabase
+          .from('stations')
+          .select('*')
+          .eq('entreprise_id', id);
+        if (stErr) throw stErr;
+        setStations((stData || []).map(s => ({
+          id: s.id,
+          nom: s.nom,
+          code: s.code,
+          adresse: s.adresse,
+          ville: s.ville,
+          region: s.region,
+          type: s.type as 'urbaine' | 'routiere' | 'depot',
+          entrepriseId: s.entreprise_id,
+          entrepriseNom: entData.nom,
+          capacite: {
+            essence: s.capacite_essence,
+            gasoil: s.capacite_gasoil,
+            gpl: s.capacite_gpl,
+            lubrifiants: s.capacite_lubrifiants,
+          },
+          stockActuel: {
+            essence: s.stock_essence,
+            gasoil: s.stock_gasoil,
+            gpl: s.stock_gpl,
+            lubrifiants: s.stock_lubrifiants,
+          },
+          nombrePompes: s.nombre_pompes,
+          gestionnaire: {
+            nom: s.gestionnaire_nom || 'Non assigné',
+            telephone: s.gestionnaire_telephone || '',
+            email: s.gestionnaire_email || '',
+          },
+          statut: s.statut as 'ouverte' | 'fermee' | 'en_travaux' | 'attente_validation',
+        })));
+
+        const { data: alertData, error: alertErr } = await supabase
+          .from('alertes')
+          .select('*, station:stations(nom)')
+          .eq('entreprise_id', id)
+          .eq('resolu', false);
+        if (alertErr) throw alertErr;
+        setAlerts((alertData || []).map(a => ({
+          id: a.id,
+          type: a.type as any,
+          stationId: a.station_id || '',
+          stationNom: (a as any).station?.nom || 'Station',
+          entrepriseNom: entData.nom,
+          message: a.message,
+          niveau: a.niveau as 'critique' | 'alerte',
+          dateCreation: a.created_at,
+          resolu: a.resolu,
+        })));
+      } catch (e) {
+        console.error(e);
+        setEntreprise(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
   
-  const entreprise = mockEntreprises.find(e => e.id === id);
-  const stations = mockStations.filter(s => s.entrepriseId === id);
-  const alerts = mockAlerts.filter(a => a.entrepriseNom === entreprise?.nom && !a.resolu);
-  
+  if (loading) {
+    return (
+      <DashboardLayout title="Chargement...">
+        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-12 w-12 animate-spin mb-4 opacity-20" />
+          <p>Chargement...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!entreprise) {
     return (
       <DashboardLayout title="Entreprise non trouvée">
