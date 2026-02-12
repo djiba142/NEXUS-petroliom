@@ -14,6 +14,7 @@ import { StatCard } from '@/components/dashboard/StatCard';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
 import { GuineaMap } from '@/components/map/GuineaMap';
 import { StationCard } from '@/components/stations/StationCard';
+import { Station } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,23 +43,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Clock, Plus, History } from 'lucide-react';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
-interface Station {
-  id: string;
-  nom: string;
-  code: string;
-  ville: string;
-  region: string;
-  latitude: number | null;
-  longitude: number | null;
-  type: string;
-  capacite_essence: number;
-  capacite_gasoil: number;
-  stock_essence: number;
-  stock_gasoil: number;
-  nombre_pompes: number;
-  statut: string;
-}
+// Use global Station type
 
 interface Entreprise {
   id: string;
@@ -72,12 +63,24 @@ interface Entreprise {
 export default function DashboardEntreprise() {
   const { profile, user } = useAuth();
   const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
+  const { toast } = useToast();
+
+  const localLogoMapping: Record<string, string> = {
+    'TOTAL': logoTotal,
+    'TotalEnergies': logoTotal,
+    'TO': logoTotal,
+    'SHELL': logoShell,
+    'VIVO': logoShell,
+    'SH': logoShell,
+    'TMI': logoTMI,
+    'TM': logoTMI,
+    'KP': logoKP,
+  };
   const [stations, setStations] = useState<Station[]>([]);
   const [livraisons, setLivraisons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const { toast } = useToast();
 
   const [newLivraison, setNewLivraison] = useState({
     station_id: '',
@@ -104,17 +107,60 @@ export default function DashboardEntreprise() {
         .maybeSingle();
 
       if (entrepriseError) throw entrepriseError;
-      setEntreprise(entrepriseData);
+      if (entrepriseData) {
+        setEntreprise({
+          ...entrepriseData,
+          logo_url: entrepriseData.logo_url || localLogoMapping[entrepriseData.sigle] || null,
+        });
+      }
 
-      // Fetch stations
+      // Fetch stations with entreprise data
       const { data: stationsData, error: stationsError } = await supabase
         .from('stations')
-        .select('*')
+        .select('*, entreprises:entreprise_id(nom, sigle, logo_url)')
         .eq('entreprise_id', profile?.entreprise_id)
         .order('nom');
 
       if (stationsError) throw stationsError;
-      setStations(stationsData || []);
+
+      const mappedStations: Station[] = (stationsData || []).map(s => ({
+        id: s.id,
+        nom: s.nom,
+        code: s.code,
+        adresse: s.adresse,
+        ville: s.ville,
+        region: s.region,
+        type: s.type as any,
+        entrepriseId: s.entreprise_id,
+        entrepriseNom: (s as any).entreprises?.nom || entrepriseData?.nom || 'Inconnu',
+        entrepriseSigle: (s as any).entreprises?.sigle || entrepriseData?.sigle || '',
+        entrepriseLogo: (s as any).entreprises?.logo_url ||
+          localLogoMapping[(s as any).entreprises?.sigle] ||
+          entrepriseData?.logo_url ||
+          localLogoMapping[entrepriseData?.sigle] ||
+          undefined,
+        capacite: {
+          essence: s.capacite_essence,
+          gasoil: s.capacite_gasoil,
+          gpl: s.capacite_gpl,
+          lubrifiants: s.capacite_lubrifiants,
+        },
+        stockActuel: {
+          essence: s.stock_essence,
+          gasoil: s.stock_gasoil,
+          gpl: s.stock_gpl,
+          lubrifiants: s.stock_lubrifiants,
+        },
+        nombrePompes: s.nombre_pompes,
+        gestionnaire: {
+          nom: s.gestionnaire_nom || 'Non assigné',
+          telephone: s.gestionnaire_telephone || '',
+          email: s.gestionnaire_email || '',
+        },
+        statut: s.statut as any,
+      }));
+
+      setStations(mappedStations);
 
       // Fetch recent livraisons for company stations
       if (stationsData && stationsData.length > 0) {
@@ -198,44 +244,21 @@ export default function DashboardEntreprise() {
     return Math.round((stock / capacity) * 100);
   };
 
-  const totalCapaciteEssence = stations.reduce((acc, s) => acc + (s.capacite_essence || 0), 0);
-  const totalCapaciteGasoil = stations.reduce((acc, s) => acc + (s.capacite_gasoil || 0), 0);
-  const totalStockEssence = stations.reduce((acc, s) => acc + (s.stock_essence || 0), 0);
-  const totalStockGasoil = stations.reduce((acc, s) => acc + (s.stock_gasoil || 0), 0);
+  const totalCapaciteEssence = stations.reduce((acc, s) => acc + (s.capacite.essence || 0), 0);
+  const totalCapaciteGasoil = stations.reduce((acc, s) => acc + (s.capacite.gasoil || 0), 0);
+  const totalStockEssence = stations.reduce((acc, s) => acc + (s.stockActuel.essence || 0), 0);
+  const totalStockGasoil = stations.reduce((acc, s) => acc + (s.stockActuel.gasoil || 0), 0);
 
   const stationsAlerte = stations.filter(s => {
-    const essencePercent = getStockPercentage(s.stock_essence, s.capacite_essence);
-    const gasoilPercent = getStockPercentage(s.stock_gasoil, s.capacite_gasoil);
+    const essencePercent = getStockPercentage(s.stockActuel.essence, s.capacite.essence);
+    const gasoilPercent = getStockPercentage(s.stockActuel.gasoil, s.capacite.gasoil);
     return essencePercent < 25 || gasoilPercent < 25;
   });
 
   // Convert stations to mock format for the map
   const mapStations = stations.map(s => ({
-    id: s.id,
-    nom: s.nom,
-    code: s.code,
-    adresse: '',
-    ville: s.ville,
-    region: s.region,
-    coordonnees: s.latitude && s.longitude ? { lat: s.latitude, lng: s.longitude } : undefined,
-    type: s.type as 'urbaine' | 'routiere' | 'depot',
-    entrepriseId: profile?.entreprise_id || '',
-    entrepriseNom: entreprise?.nom || '',
-    capacite: {
-      essence: s.capacite_essence,
-      gasoil: s.capacite_gasoil,
-      gpl: 0,
-      lubrifiants: 0,
-    },
-    stockActuel: {
-      essence: s.stock_essence,
-      gasoil: s.stock_gasoil,
-      gpl: 0,
-      lubrifiants: 0,
-    },
-    nombrePompes: s.nombre_pompes,
-    gestionnaire: { nom: '', telephone: '', email: '' },
-    statut: s.statut as 'ouverte' | 'fermee' | 'en_travaux' | 'attente_validation',
+    ...s,
+    coordonnees: s.coordonnees || undefined,
   }));
 
   if (loading) {
@@ -456,8 +479,8 @@ export default function DashboardEntreprise() {
               </div>
             ) : (
               stations.slice(0, 5).map((station) => {
-                const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
-                const gasoilPercent = getStockPercentage(station.stock_gasoil, station.capacite_gasoil);
+                const essencePercent = getStockPercentage(station.stockActuel.essence, station.capacite.essence);
+                const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
 
                 return (
                   <div key={station.id} className="space-y-2">
@@ -539,8 +562,8 @@ export default function DashboardEntreprise() {
             ) : (
               <div className="space-y-3">
                 {stationsAlerte.map((station) => {
-                  const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
-                  const gasoilPercent = getStockPercentage(station.stock_gasoil, station.capacite_gasoil);
+                  const essencePercent = getStockPercentage(station.stockActuel.essence, station.capacite.essence);
+                  const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
 
                   return (
                     <div

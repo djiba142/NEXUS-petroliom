@@ -160,6 +160,22 @@ export default function StationDetailPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
+
+          {/* Entreprise Logo */}
+          <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-border overflow-hidden shadow-sm">
+            {station.entrepriseLogo ? (
+              <img
+                src={station.entrepriseLogo}
+                alt={`Logo ${station.entrepriseNom}`}
+                className="h-10 w-10 object-contain"
+              />
+            ) : (
+              <span className="text-sm font-bold text-primary">
+                {station.entrepriseSigle?.substring(0, 2).toUpperCase() || 'ST'}
+              </span>
+            )}
+          </div>
+
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-foreground">{station.nom}</h1>
@@ -295,7 +311,11 @@ export default function StationDetailPage() {
               </CardContent>
             </Card>
 
-            <StockEvolutionChart stationId={id} title="Évolution des stocks de la station" />
+            {/* Stock Evolution Chart */}
+            <StockEvolutionChart 
+              stationId={id} 
+              title="Évolution des stocks de la station" 
+            />
 
             <Card>
               <CardHeader className="pb-4">
@@ -387,24 +407,20 @@ export default function StationDetailPage() {
                     </div>
                   </div>
                   <div className="space-y-2 pt-2">
-                    {station.gestionnaire.telephone && (
-                      <a 
-                        href={`tel:${station.gestionnaire.telephone}`}
-                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                      >
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        {station.gestionnaire.telephone}
-                      </a>
-                    )}
-                    {station.gestionnaire.email && (
-                      <a 
-                        href={`mailto:${station.gestionnaire.email}`}
-                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                      >
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {station.gestionnaire.email}
-                      </a>
-                    )}
+                    <a 
+                      href={`tel:${station.gestionnaire.telephone}`}
+                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                    >
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      {station.gestionnaire.telephone}
+                    </a>
+                    <a 
+                      href={`mailto:${station.gestionnaire.email}`}
+                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                    >
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      {station.gestionnaire.email}
+                    </a>
                   </div>
                 </div>
               </CardContent>
