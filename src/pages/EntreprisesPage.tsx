@@ -4,6 +4,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { EntrepriseCard } from '@/components/entreprises/EntrepriseCard';
 import { regions } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -53,6 +58,18 @@ export default function EntreprisesPage() {
     contactEmail: '',
   });
 
+  const localLogoMapping: Record<string, string> = {
+    'TOTAL': logoTotal,
+    'TotalEnergies': logoTotal,
+    'TO': logoTotal,
+    'SHELL': logoShell,
+    'VIVO': logoShell,
+    'SH': logoShell,
+    'TMI': logoTMI,
+    'TM': logoTMI,
+    'KP': logoKP,
+  };
+
   const { toast } = useToast();
 
   const fetchEntreprises = async () => {
@@ -77,7 +94,7 @@ export default function EntreprisesPage() {
         region: e.region,
         statut: e.statut as 'actif' | 'suspendu' | 'ferme',
         nombreStations: counts[e.id] ?? 0,
-        logo: e.logo_url ?? undefined,
+        logo: e.logo_url || localLogoMapping[e.sigle] || undefined,
         contact: {
           nom: e.contact_nom || 'N/A',
           telephone: e.contact_telephone || '',
@@ -102,7 +119,7 @@ export default function EntreprisesPage() {
 
   const filteredEntreprises = entreprises.filter(e => {
     const matchesSearch = e.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          e.sigle.toLowerCase().includes(searchQuery.toLowerCase());
+      e.sigle.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRegion = selectedRegion === 'all' || e.region === selectedRegion;
     const matchesType = selectedType === 'all' || e.type === selectedType;
     return matchesSearch && matchesRegion && matchesType;
@@ -166,8 +183,8 @@ export default function EntreprisesPage() {
   };
 
   return (
-    <DashboardLayout 
-      title="Entreprises" 
+    <DashboardLayout
+      title="Entreprises"
       subtitle="Gestion des distributeurs d'hydrocarbures"
     >
       {/* Filters */}
@@ -181,7 +198,7 @@ export default function EntreprisesPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Select value={selectedRegion} onValueChange={setSelectedRegion}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Région" />

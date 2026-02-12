@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { 
-  Building2, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Fuel, 
+import {
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
+  Fuel,
   ChevronRight,
   AlertTriangle,
   CheckCircle2,
@@ -20,6 +20,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 import type { Entreprise, Station, Alert } from '@/types';
 
 const getStockPercentage = (current: number, capacity: number) => {
@@ -97,7 +102,17 @@ export default function EntrepriseDetailPage() {
           region: entData.region,
           statut: entData.statut as 'actif' | 'suspendu' | 'ferme',
           nombreStations: 0,
-          logo: entData.logo_url ?? undefined,
+          logo: entData.logo_url || (entData.sigle && {
+            'TOTAL': logoTotal,
+            'TotalEnergies': logoTotal,
+            'TO': logoTotal,
+            'SHELL': logoShell,
+            'VIVO': logoShell,
+            'SH': logoShell,
+            'TMI': logoTMI,
+            'TM': logoTMI,
+            'KP': logoKP,
+          }[entData.sigle]) || undefined,
           contact: {
             nom: entData.contact_nom || 'N/A',
             telephone: entData.contact_telephone || '',
@@ -120,6 +135,8 @@ export default function EntrepriseDetailPage() {
           type: s.type as 'urbaine' | 'routiere' | 'depot',
           entrepriseId: s.entreprise_id,
           entrepriseNom: entData.nom,
+          entrepriseSigle: entData.sigle,
+          entrepriseLogo: entData.logo_url || undefined,
           capacite: {
             essence: s.capacite_essence,
             gasoil: s.capacite_gasoil,
@@ -167,7 +184,7 @@ export default function EntrepriseDetailPage() {
     };
     fetchData();
   }, [id]);
-  
+
   if (loading) {
     return (
       <DashboardLayout title="Chargement...">
@@ -210,8 +227,8 @@ export default function EntrepriseDetailPage() {
   const alertesCritiques = alerts.filter(a => a.niveau === 'critique').length;
 
   return (
-    <DashboardLayout 
-      title={entreprise.nom} 
+    <DashboardLayout
+      title={entreprise.nom}
       subtitle={`${entreprise.type === 'compagnie' ? 'Compagnie' : 'Distributeur'} - ${entreprise.region}`}
     >
       {/* Back Button */}
@@ -229,8 +246,8 @@ export default function EntrepriseDetailPage() {
               <div className="flex items-center gap-4">
                 <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center border border-border overflow-hidden">
                   {entreprise.logo ? (
-                    <img 
-                      src={entreprise.logo} 
+                    <img
+                      src={entreprise.logo}
                       alt={`Logo ${entreprise.sigle}`}
                       className="h-14 w-14 object-contain"
                     />
@@ -336,7 +353,7 @@ export default function EntrepriseDetailPage() {
                     <StockBadge percentage={essencePercentage} />
                   </div>
                   <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={cn(
                         "h-full rounded-full transition-all",
                         getStockLevel(totalStock.essence, totalCapacity.essence) === 'critical' && "bg-stock-critical",
@@ -359,7 +376,7 @@ export default function EntrepriseDetailPage() {
                     <StockBadge percentage={gasoilPercentage} />
                   </div>
                   <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={cn(
                         "h-full rounded-full transition-all",
                         getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'critical' && "bg-stock-critical",
@@ -379,9 +396,9 @@ export default function EntrepriseDetailPage() {
           </Card>
 
           {/* Stock Evolution Chart */}
-          <StockEvolutionChart 
-            entrepriseId={id} 
-            title="Évolution des stocks de l'entreprise" 
+          <StockEvolutionChart
+            entrepriseId={id}
+            title="Évolution des stocks de l'entreprise"
           />
 
           {/* Stations List */}
@@ -396,8 +413,8 @@ export default function EntrepriseDetailPage() {
                   const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
                   const essenceLevel = getStockLevel(station.stockActuel.essence, station.capacite.essence);
                   const gasoilLevel = getStockLevel(station.stockActuel.gasoil, station.capacite.gasoil);
-                  const worstLevel = essenceLevel === 'critical' || gasoilLevel === 'critical' 
-                    ? 'critical' 
+                  const worstLevel = essenceLevel === 'critical' || gasoilLevel === 'critical'
+                    ? 'critical'
                     : essenceLevel === 'warning' || gasoilLevel === 'warning'
                       ? 'warning'
                       : 'healthy';
@@ -481,8 +498,8 @@ export default function EntrepriseDetailPage() {
                       key={alert.id}
                       className={cn(
                         "p-3 rounded-lg border",
-                        alert.niveau === 'critique' 
-                          ? "bg-destructive/5 border-destructive/20" 
+                        alert.niveau === 'critique'
+                          ? "bg-destructive/5 border-destructive/20"
                           : "bg-amber-50 border-amber-200"
                       )}
                     >
@@ -493,7 +510,7 @@ export default function EntrepriseDetailPage() {
                         </div>
                         <span className={cn(
                           "px-2 py-0.5 rounded-full text-[10px] font-medium",
-                          alert.niveau === 'critique' 
+                          alert.niveau === 'critique'
                             ? "bg-destructive/10 text-destructive"
                             : "bg-amber-100 text-amber-700"
                         )}>

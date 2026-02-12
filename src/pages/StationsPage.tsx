@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,24 @@ import { Station } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+
+// Import logos for mapping
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
+
+const localLogoMapping: Record<string, string> = {
+  'TOTAL': logoTotal,
+  'TotalEnergies': logoTotal,
+  'TO': logoTotal,
+  'SHELL': logoShell,
+  'VIVO': logoShell,
+  'SH': logoShell,
+  'TMI': logoTMI,
+  'TM': logoTMI,
+  'KP': logoKP,
+};
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
@@ -51,6 +70,8 @@ export default function StationsPage() {
     entreprise_id: '',
     capacite_essence: 50000,
     capacite_gasoil: 50000,
+    capacite_gpl: 0,
+    capacite_lubrifiants: 0,
     gestionnaire_nom: '',
     gestionnaire_telephone: '',
     gestionnaire_email: '',
@@ -70,7 +91,7 @@ export default function StationsPage() {
       // 2. Fetch stations with RBAC filtering
       let query = supabase.from('stations').select(`
         *,
-        entreprises:entreprise_id(nom, sigle)
+        entreprises:entreprise_id(nom, sigle, logo_url)
       `);
 
       if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
@@ -91,6 +112,8 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
+        entrepriseSigle: s.entreprises?.sigle || '',
+        entrepriseLogo: s.entreprises?.logo_url || localLogoMapping[s.entreprises?.sigle || ''] || undefined,
         capacite: {
           essence: s.capacite_essence,
           gasoil: s.capacite_gasoil,
@@ -167,7 +190,7 @@ export default function StationsPage() {
       : stationForm.entreprise_id;
 
     if (!stationForm.nom?.trim() || !stationForm.code?.trim() || !stationForm.adresse?.trim() ||
-        !stationForm.ville?.trim() || !stationForm.region || !entrepriseId) {
+      !stationForm.ville?.trim() || !stationForm.region || !entrepriseId) {
       toast({
         variant: 'destructive',
         title: 'Champs obligatoires manquants',
@@ -188,6 +211,8 @@ export default function StationsPage() {
         entreprise_id: entrepriseId,
         capacite_essence: stationForm.capacite_essence || 0,
         capacite_gasoil: stationForm.capacite_gasoil || 0,
+        capacite_gpl: (stationForm as any).capacite_gpl || 0,
+        capacite_lubrifiants: (stationForm as any).capacite_lubrifiants || 0,
         statut: 'ouverte',
         gestionnaire_nom: stationForm.gestionnaire_nom.trim() || null,
         gestionnaire_telephone: stationForm.gestionnaire_telephone.trim() || null,
@@ -211,6 +236,8 @@ export default function StationsPage() {
         entreprise_id: '',
         capacite_essence: 50000,
         capacite_gasoil: 50000,
+        capacite_gpl: 0,
+        capacite_lubrifiants: 0,
         gestionnaire_nom: '',
         gestionnaire_telephone: '',
         gestionnaire_email: '',
@@ -332,140 +359,217 @@ export default function StationsPage() {
       )}
 
       <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Nouvelle station</DialogTitle>
-            <DialogDescription>
-              Renseignez les informations de la station-service.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nom de la station *</Label>
-              <Input
-                value={stationForm.nom}
-                onChange={(e) => setStationForm({ ...stationForm, nom: e.target.value })}
-                placeholder="Ex: Station Centre-ville"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Code unique *</Label>
-              <Input
-                value={stationForm.code}
-                onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })}
-                placeholder="Ex: TE-CON-001"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Adresse *</Label>
-              <Input
-                value={stationForm.adresse}
-                onChange={(e) => setStationForm({ ...stationForm, adresse: e.target.value })}
-                placeholder="Ex: Avenue de la République"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Ville *</Label>
-                <Input
-                  value={stationForm.ville}
-                  onChange={(e) => setStationForm({ ...stationForm, ville: e.target.value })}
-                  placeholder="Ex: Conakry"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Région *</Label>
-                <Select
-                  value={stationForm.region}
-                  onValueChange={(v) => setStationForm({ ...stationForm, region: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {regions.map(r => (
-                      <SelectItem key={r} value={r}>{r}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select
-                value={stationForm.type}
-                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => setStationForm({ ...stationForm, type: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="urbaine">Urbaine</SelectItem>
-                  <SelectItem value="routiere">Routière</SelectItem>
-                  <SelectItem value="depot">Dépôt</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {currentUserRole === 'super_admin' && (
-              <div className="space-y-2">
-                <Label>Entreprise *</Label>
-                <Select
-                  value={stationForm.entreprise_id}
-                  onValueChange={(v) => setStationForm({ ...stationForm, entreprise_id: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {entreprises.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.nom}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Capacité essence (L)</Label>
-                <Input
-                  type="number"
-                  value={stationForm.capacite_essence || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_essence: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Capacité gasoil (L)</Label>
-                <Input
-                  type="number"
-                  value={stationForm.capacite_gasoil || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_gasoil: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Gestionnaire (nom)</Label>
-              <Input
-                value={stationForm.gestionnaire_nom}
-                onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
-                placeholder="Nom du gestionnaire"
-              />
-            </div>
+        <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col p-0 overflow-hidden">
+          <div className="p-6 pb-2">
+            <DialogHeader>
+              <DialogTitle>Nouvelle station</DialogTitle>
+              <DialogDescription>
+                Renseignez les informations de la station-service. Les champs marqués d'une * sont obligatoires.
+              </DialogDescription>
+            </DialogHeader>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveStation} disabled={savingStation}>
-              {savingStation ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Enregistrement...
-                </>
-              ) : (
-                'Enregistrer'
-              )}
-            </Button>
-          </DialogFooter>
+
+          <ScrollArea className="flex-1">
+            <div className="px-6 py-4 space-y-6">
+              {/* Informations Générales */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold border-b pb-1 text-primary">Informations Générales</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nom">Nom de la station *</Label>
+                    <Input
+                      id="nom"
+                      placeholder="Ex: Total Hamdallaye"
+                      value={stationForm.nom}
+                      onChange={(e) => setStationForm({ ...stationForm, nom: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="code">Code Station *</Label>
+                    <Input
+                      id="code"
+                      placeholder="Ex: TE-HAM-001"
+                      value={stationForm.code}
+                      onChange={(e) => setStationForm({ ...stationForm, code: e.target.value.toUpperCase() })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ville">Ville *</Label>
+                    <Input
+                      id="ville"
+                      placeholder="Conakry"
+                      value={stationForm.ville}
+                      onChange={(e) => setStationForm({ ...stationForm, ville: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="region">Région *</Label>
+                    <Select
+                      value={stationForm.region}
+                      onValueChange={(v) => setStationForm({ ...stationForm, region: v })}
+                    >
+                      <SelectTrigger id="region">
+                        <SelectValue placeholder="Région" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {regionsList.map(region => (
+                          <SelectItem key={region} value={region}>{region}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="adresse">Adresse complète *</Label>
+                  <Input
+                    id="adresse"
+                    placeholder="Quartier, Rue, Commune"
+                    value={stationForm.adresse}
+                    onChange={(e) => setStationForm({ ...stationForm, adresse: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Type de station</Label>
+                    <Select
+                      value={stationForm.type}
+                      onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => setStationForm({ ...stationForm, type: v })}
+                    >
+                      <SelectTrigger id="type">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="urbaine">Urbaine</SelectItem>
+                        <SelectItem value="routiere">Routière</SelectItem>
+                        <SelectItem value="depot">Dépôt</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {currentUserRole === 'super_admin' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="entreprise">Entreprise *</Label>
+                      <Select
+                        value={stationForm.entreprise_id}
+                        onValueChange={(v) => setStationForm({ ...stationForm, entreprise_id: v })}
+                      >
+                        <SelectTrigger id="entreprise">
+                          <SelectValue placeholder="Choisir" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {entreprises.map(e => (
+                            <SelectItem key={e.id} value={e.id}>{e.sigle}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Capacités */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-sm font-semibold border-b pb-1 text-primary">Capacités de Stockage (Litres)</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cap_essence">Essence *</Label>
+                    <Input
+                      id="cap_essence"
+                      type="number"
+                      value={stationForm.capacite_essence}
+                      onChange={(e) => setStationForm({ ...stationForm, capacite_essence: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cap_gasoil">Gasoil *</Label>
+                    <Input
+                      id="cap_gasoil"
+                      type="number"
+                      value={stationForm.capacite_gasoil}
+                      onChange={(e) => setStationForm({ ...stationForm, capacite_gasoil: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cap_gpl">GPL</Label>
+                    <Input
+                      id="cap_gpl"
+                      type="number"
+                      value={(stationForm as any).capacite_gpl || 0}
+                      onChange={(e) => setStationForm({ ...stationForm, capacite_gpl: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cap_lub">Lubrifiants</Label>
+                    <Input
+                      id="cap_lub"
+                      type="number"
+                      value={(stationForm as any).capacite_lubrifiants || 0}
+                      onChange={(e) => setStationForm({ ...stationForm, capacite_lubrifiants: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Gestionnaire */}
+              <div className="space-y-4 pt-2">
+                <h3 className="text-sm font-semibold border-b pb-1 text-primary">Informations du Gestionnaire</h3>
+                <div className="space-y-2">
+                  <Label htmlFor="gest_nom">Nom complet</Label>
+                  <Input
+                    id="gest_nom"
+                    placeholder="Alpha Keita"
+                    value={stationForm.gestionnaire_nom}
+                    onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gest_tel">Téléphone</Label>
+                    <Input
+                      id="gest_tel"
+                      placeholder="+224 62X XX XX XX"
+                      value={stationForm.gestionnaire_telephone}
+                      onChange={(e) => setStationForm({ ...stationForm, gestionnaire_telephone: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gest_email">Email</Label>
+                    <Input
+                      id="gest_email"
+                      type="email"
+                      placeholder="exemple@total.gn"
+                      value={stationForm.gestionnaire_email}
+                      onChange={(e) => setStationForm({ ...stationForm, gestionnaire_email: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <div className="p-6 pt-2 border-t mt-auto">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleSaveStation} disabled={savingStation}>
+                {savingStation ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Enregistrement...
+                  </>
+                ) : (
+                  'Enregistrer la station'
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
