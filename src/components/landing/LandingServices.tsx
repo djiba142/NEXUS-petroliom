@@ -76,8 +76,6 @@ export const LandingServices = () => {
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
-                            { title: "État / MEHH", role: "Supervision Stratégique", desc: "Vision globale pour anticiper les crises et orienter les décisions de haut niveau." },
-                            { title: "DNH", role: "Régulation Technique", desc: "Contrôle opérationnel, suivi des inspecteurs et validation des flux." },
                             { title: "SONAP / SGP", role: "Logistique & Import", desc: "Optimisation des commandes et planification des sorties de dépôts." },
                             { title: "Distributeurs", role: "Suivi Commercial", desc: "Gestion simplifiée des stations et reporting automatique vers l'État." }
                         ].map((s, i) => (

@@ -16,15 +16,6 @@ import logoSihg from '@/assets/logo.png';
 
 const stakeholders = [
   {
-    id: 'mehh',
-    name: 'Ministère de l\'Énergie, de l\'Hydraulique et des Hydrocarbures',
-    sigle: 'MEHH',
-    role: 'Porteur politique du projet',
-    description: 'Responsable de la politique énergétique nationale et de la réglementation du secteur des hydrocarbures.',
-    icon: Building2,
-    color: 'bg-blue-500',
-  },
-  {
     id: 'sonap',
     name: 'Société Nationale des Pétroles',
     sigle: 'SONAP',
@@ -32,15 +23,6 @@ const stakeholders = [
     description: 'Détenteur du monopole d\'importation des hydrocarbures. Utilise le SIHG pour connaître les stocks nationaux et planifier les commandes.',
     icon: Globe,
     color: 'bg-emerald-500',
-  },
-  {
-    id: 'dnh',
-    name: 'Direction Nationale des Hydrocarbures',
-    sigle: 'DNH',
-    role: 'Contrôle et régulation',
-    description: 'Instrument de contrôle du secteur. Dirige les inspecteurs sur le terrain via l\'application.',
-    icon: Shield,
-    color: 'bg-amber-500',
   },
   {
     id: 'sgp',
