@@ -27,6 +27,7 @@ import { Station } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Link } from 'react-router-dom';
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
@@ -36,7 +37,7 @@ export default function StationsPage() {
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
   const [stations, setStations] = useState<Station[]>([]);
-  const [entreprises, setEntreprises] = useState<{ id: string, nom: string, sigle: string }[]>([]);
+  const [entreprises, setEntreprises] = useState<{ id: string; nom: string; sigle: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [regionsList, setRegionsList] = useState<string[]>([]);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
@@ -63,11 +64,14 @@ export default function StationsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch entreprises for filters
-      const { data: entData } = await supabase.from('entreprises').select('id, nom, sigle');
+      // Entreprises
+      const { data: entData, error: entError } = await supabase
+        .from('entreprises')
+        .select('id, nom, sigle');
+      if (entError) throw entError;
       setEntreprises(entData || []);
 
-      // 2. Fetch stations with RBAC filtering
+      // Stations
       let query = supabase.from('stations').select(`
         *,
         entreprises:entreprise_id(nom, sigle)
@@ -80,7 +84,6 @@ export default function StationsPage() {
       const { data: stData, error: stError } = await query;
       if (stError) throw stError;
 
-      // 3. Map to Station type
       const mappedStations: Station[] = (stData || []).map(s => ({
         id: s.id,
         nom: s.nom,
@@ -92,18 +95,18 @@ export default function StationsPage() {
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
         capacite: {
-          essence: s.capacite_essence,
-          gasoil: s.capacite_gasoil,
-          gpl: s.capacite_gpl,
-          lubrifiants: s.capacite_lubrifiants,
+          essence: s.capacite_essence || 0,
+          gasoil: s.capacite_gasoil || 0,
+          gpl: s.capacite_gpl || 0,
+          lubrifiants: s.capacite_lubrifiants || 0,
         },
         stockActuel: {
-          essence: s.stock_essence,
-          gasoil: s.stock_gasoil,
-          gpl: s.stock_gpl,
-          lubrifiants: s.stock_lubrifiants,
+          essence: s.stock_essence || 0,
+          gasoil: s.stock_gasoil || 0,
+          gpl: s.stock_gpl || 0,
+          lubrifiants: s.stock_lubrifiants || 0,
         },
-        nombrePompes: s.nombre_pompes,
+        nombrePompes: s.nombre_pompes || 0,
         gestionnaire: {
           nom: s.gestionnaire_nom || 'Non assigné',
           telephone: s.gestionnaire_telephone || '',
@@ -114,31 +117,35 @@ export default function StationsPage() {
 
       setStations(mappedStations);
 
-      // Extract unique regions
-      const uniqueRegions = Array.from(new Set(mappedStations.map(s => s.region)));
+      const uniqueRegions = Array.from(new Set(mappedStations.map(s => s.region).filter(Boolean)));
       setRegionsList(uniqueRegions);
-
     } catch (error) {
-      console.error('Error fetching stations:', error);
+      console.error('Erreur chargement données:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible de charger les stations',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const filteredStations = stations.filter(s => {
-    const matchesSearch = s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.code.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRegion = selectedRegion === 'all' || s.region === selectedRegion;
     const matchesEntreprise = selectedEntreprise === 'all' || s.entrepriseId === selectedEntreprise;
 
     if (activeTab === 'critical') {
-      const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-      const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+      const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+      const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return matchesSearch && matchesRegion && matchesEntreprise && (essencePercent < 10 || gasoilPercent < 10);
     }
     if (activeTab === 'warning') {
-      const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-      const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+      const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+      const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return matchesSearch && matchesRegion && matchesEntreprise &&
         ((essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25));
     }
@@ -147,38 +154,48 @@ export default function StationsPage() {
   });
 
   const criticalCount = stations.filter(s => {
-    const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-    const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
     return essencePercent < 10 || gasoilPercent < 10;
   }).length;
 
   const warningCount = stations.filter(s => {
-    const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-    const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
     return (essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25);
   }).length;
 
-  const canCreateStation = currentUserRole === 'super_admin' ||
+  const canCreateStation =
+    currentUserRole === 'super_admin' ||
     (currentUserRole === 'responsable_entreprise' && !!currentUserProfile?.entreprise_id);
 
   const handleSaveStation = async () => {
-    const entrepriseId = currentUserRole === 'responsable_entreprise'
-      ? currentUserProfile?.entreprise_id
-      : stationForm.entreprise_id;
+    const entrepriseId =
+      currentUserRole === 'responsable_entreprise'
+        ? currentUserProfile?.entreprise_id
+        : stationForm.entreprise_id;
 
-    if (!stationForm.nom?.trim() || !stationForm.code?.trim() || !stationForm.adresse?.trim() ||
-        !stationForm.ville?.trim() || !stationForm.region || !entrepriseId) {
+    const missing: string[] = [];
+    if (!stationForm.nom?.trim()) missing.push('Nom');
+    if (!stationForm.code?.trim()) missing.push('Code');
+    if (!stationForm.adresse?.trim()) missing.push('Adresse');
+    if (!stationForm.ville?.trim()) missing.push('Ville');
+    if (!stationForm.region) missing.push('Région');
+    if (!entrepriseId) missing.push('Entreprise');
+
+    if (missing.length > 0) {
       toast({
         variant: 'destructive',
         title: 'Champs obligatoires manquants',
-        description: 'Veuillez remplir le nom, le code, l\'adresse, la ville et la région.',
+        description: `Veuillez remplir : ${missing.join(', ')}`,
       });
       return;
     }
 
     setSavingStation(true);
+
     try {
-      const { error } = await supabase.from('stations').insert({
+      const payload = {
         nom: stationForm.nom.trim(),
         code: stationForm.code.trim().toUpperCase(),
         adresse: stationForm.adresse.trim(),
@@ -186,20 +203,31 @@ export default function StationsPage() {
         region: stationForm.region,
         type: stationForm.type,
         entreprise_id: entrepriseId,
-        capacite_essence: stationForm.capacite_essence || 0,
-        capacite_gasoil: stationForm.capacite_gasoil || 0,
+        capacite_essence: Number(stationForm.capacite_essence) || 0,
+        capacite_gasoil: Number(stationForm.capacite_gasoil) || 0,
+        capacite_gpl: 0,
+        capacite_lubrifiants: 0,
+        stock_essence: 0,
+        stock_gasoil: 0,
+        stock_gpl: 0,
+        stock_lubrifiants: 0,
         statut: 'ouverte',
-        gestionnaire_nom: stationForm.gestionnaire_nom.trim() || null,
-        gestionnaire_telephone: stationForm.gestionnaire_telephone.trim() || null,
-        gestionnaire_email: stationForm.gestionnaire_email.trim() || null,
-      });
+        gestionnaire_nom: stationForm.gestionnaire_nom?.trim() || null,
+        gestionnaire_telephone: stationForm.gestionnaire_telephone?.trim() || null,
+        gestionnaire_email: stationForm.gestionnaire_email?.trim() || null,
+      };
+
+      console.log('Payload envoyé à Supabase :', payload);
+
+      const { error } = await supabase.from('stations').insert(payload);
 
       if (error) throw error;
 
       toast({
-        title: 'Station enregistrée',
-        description: `${stationForm.nom} a été créée avec succès.`,
+        title: 'Succès',
+        description: `${stationForm.nom} (${stationForm.code}) a été créée`,
       });
+
       setIsStationDialogOpen(false);
       setStationForm({
         nom: '',
@@ -215,12 +243,14 @@ export default function StationsPage() {
         gestionnaire_telephone: '',
         gestionnaire_email: '',
       });
-      fetchData();
-    } catch (err: unknown) {
+
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur création station :', err);
       toast({
         variant: 'destructive',
-        title: 'Erreur lors de l\'enregistrement',
-        description: err instanceof Error ? err.message : 'Impossible d\'enregistrer la station.',
+        title: 'Échec création',
+        description: err?.message || 'Vérifiez la console (F12)',
       });
     } finally {
       setSavingStation(false);
@@ -237,21 +267,17 @@ export default function StationsPage() {
   };
 
   return (
-    <DashboardLayout
-      title="Stations-service"
-      subtitle="Surveillance des stocks en temps réel"
-    >
+    <DashboardLayout title="Stations-service" subtitle="Surveillance des stocks en temps réel">
       <div className="flex justify-between items-center mb-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
           <TabsList className="bg-secondary/50">
-            <TabsTrigger value="all">
-              Toutes ({stations.length})
-            </TabsTrigger>
-            <TabsTrigger value="critical" className="text-stock-critical data-[state=active]:text-stock-critical">
+            <TabsTrigger value="all">Toutes ({stations.length})</TabsTrigger>
+            <TabsTrigger value="critical" className="text-red-600 data-[state=active]:text-red-600">
               <AlertTriangle className="h-4 w-4 mr-1" />
               Critiques ({criticalCount})
             </TabsTrigger>
-            <TabsTrigger value="warning" className="text-stock-warning data-[state=active]:text-stock-warning">
+            <TabsTrigger value="warning" className="text-amber-600 data-[state=active]:text-amber-600">
+              <AlertTriangle className="h-4 w-4 mr-1" />
               Alertes ({warningCount})
             </TabsTrigger>
           </TabsList>
@@ -264,14 +290,19 @@ export default function StationsPage() {
               Nouvelle station
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchData}
+            disabled={loading}
+            className="gap-2"
+          >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             <span className="hidden sm:inline">Actualiser</span>
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -303,68 +334,75 @@ export default function StationsPage() {
             <SelectContent>
               <SelectItem value="all">Toutes les entreprises</SelectItem>
               {entreprises.map(e => (
-                <SelectItem key={e.id} value={e.id}>{e.sigle}</SelectItem>
+                <SelectItem key={e.id} value={e.id}>{e.sigle || e.nom}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
       </div>
 
-      {/* Stations Grid */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-          <RefreshCw className="h-12 w-12 animate-spin mb-4 opacity-20" />
+          <Loader2 className="h-12 w-12 animate-spin mb-4" />
           <p>Chargement des stations...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredStations.map(station => (
-            <StationCard key={station.id} station={station} />
-          ))}
-        </div>
-      )}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredStations.map(station => (
+              <Link key={station.id} to={`/stations/${station.id}`} className="block hover:scale-[1.02] transition-transform">
+                <StationCard station={station} />
+              </Link>
+            ))}
+          </div>
 
-      {!loading && filteredStations.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-lg font-medium">Aucune station trouvée</p>
-          <p className="text-sm">Modifiez vos critères de recherche</p>
-        </div>
+          {filteredStations.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <p className="text-lg font-medium">Aucune station trouvée</p>
+              <p className="text-sm">Modifiez vos critères ou créez-en une nouvelle</p>
+            </div>
+          )}
+        </>
       )}
 
       <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader>
-            <DialogTitle>Nouvelle station</DialogTitle>
+            <DialogTitle>Nouvelle station-service</DialogTitle>
             <DialogDescription>
-              Renseignez les informations de la station-service.
+              Renseignez les informations principales de la station.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+
+          <div className="space-y-5 py-2">
             <div className="space-y-2">
               <Label>Nom de la station *</Label>
               <Input
                 value={stationForm.nom}
                 onChange={(e) => setStationForm({ ...stationForm, nom: e.target.value })}
-                placeholder="Ex: Station Centre-ville"
+                placeholder="Ex: Station Kipé"
               />
             </div>
+
             <div className="space-y-2">
               <Label>Code unique *</Label>
               <Input
                 value={stationForm.code}
                 onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })}
-                placeholder="Ex: TE-CON-001"
+                placeholder="Ex: CON-001"
               />
             </div>
+
             <div className="space-y-2">
-              <Label>Adresse *</Label>
+              <Label>Adresse complète *</Label>
               <Input
                 value={stationForm.adresse}
                 onChange={(e) => setStationForm({ ...stationForm, adresse: e.target.value })}
-                placeholder="Ex: Avenue de la République"
+                placeholder="Ex: Avenue de la République, Kipé"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Ville *</Label>
                 <Input
@@ -380,7 +418,7 @@ export default function StationsPage() {
                   onValueChange={(v) => setStationForm({ ...stationForm, region: v })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
+                    <SelectValue placeholder="Choisir une région" />
                   </SelectTrigger>
                   <SelectContent>
                     {regions.map(r => (
@@ -390,22 +428,26 @@ export default function StationsPage() {
                 </Select>
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>Type de station</Label>
               <Select
                 value={stationForm.type}
-                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => setStationForm({ ...stationForm, type: v })}
+                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => 
+                  setStationForm({ ...stationForm, type: v })
+                }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="urbaine">Urbaine</SelectItem>
                   <SelectItem value="routiere">Routière</SelectItem>
-                  <SelectItem value="depot">Dépôt</SelectItem>
+                  <SelectItem value="depot">Dépôt / Entrepôt</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
             {currentUserRole === 'super_admin' && (
               <div className="space-y-2">
                 <Label>Entreprise *</Label>
@@ -414,55 +456,76 @@ export default function StationsPage() {
                   onValueChange={(v) => setStationForm({ ...stationForm, entreprise_id: v })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
+                    <SelectValue placeholder="Choisir l'entreprise" />
                   </SelectTrigger>
                   <SelectContent>
                     {entreprises.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.nom}</SelectItem>
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.sigle || e.nom}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Capacité essence (L)</Label>
+                <Label>Capacité essence (litres)</Label>
                 <Input
                   type="number"
+                  min="0"
                   value={stationForm.capacite_essence || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_essence: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStationForm({
+                      ...stationForm,
+                      capacite_essence: val === '' ? 0 : Number(val),
+                    });
+                  }}
+                  placeholder="Ex: 50000"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Capacité gasoil (L)</Label>
+                <Label>Capacité gasoil (litres)</Label>
                 <Input
                   type="number"
+                  min="0"
                   value={stationForm.capacite_gasoil || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_gasoil: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStationForm({
+                      ...stationForm,
+                      capacite_gasoil: val === '' ? 0 : Number(val),
+                    });
+                  }}
+                  placeholder="Ex: 50000"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Gestionnaire (nom)</Label>
+
+            <div className="space-y-4 border-t pt-4">
+              <Label>Gestionnaire de la station (optionnel)</Label>
               <Input
+                placeholder="Nom complet du gestionnaire"
                 value={stationForm.gestionnaire_nom}
                 onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
-                placeholder="Nom du gestionnaire"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>Annuler</Button>
+
+          <DialogFooter className="sticky bottom-0 bg-background pt-4 -mx-6 -mb-6 px-6 pb-6 border-t">
+            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
+              Annuler
+            </Button>
             <Button onClick={handleSaveStation} disabled={savingStation}>
               {savingStation ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Enregistrement...
                 </>
               ) : (
-                'Enregistrer'
+                'Créer la station'
               )}
             </Button>
           </DialogFooter>

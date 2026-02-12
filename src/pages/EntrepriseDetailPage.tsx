@@ -82,12 +82,14 @@ export default function EntrepriseDetailPage() {
           .select('*')
           .eq('id', id)
           .maybeSingle();
+
         if (entErr) throw entErr;
         if (!entData) {
           setEntreprise(null);
           setLoading(false);
           return;
         }
+
         setEntreprise({
           id: entData.id,
           nom: entData.nom,
@@ -109,7 +111,9 @@ export default function EntrepriseDetailPage() {
           .from('stations')
           .select('*')
           .eq('entreprise_id', id);
+
         if (stErr) throw stErr;
+
         setStations((stData || []).map(s => ({
           id: s.id,
           nom: s.nom,
@@ -146,7 +150,9 @@ export default function EntrepriseDetailPage() {
           .select('*, station:stations(nom)')
           .eq('entreprise_id', id)
           .eq('resolu', false);
+
         if (alertErr) throw alertErr;
+
         setAlerts((alertData || []).map(a => ({
           id: a.id,
           type: a.type as any,
@@ -167,7 +173,7 @@ export default function EntrepriseDetailPage() {
     };
     fetchData();
   }, [id]);
-  
+
   if (loading) {
     return (
       <DashboardLayout title="Chargement...">
@@ -192,7 +198,7 @@ export default function EntrepriseDetailPage() {
     );
   }
 
-  // Calculate aggregate stats
+  // Calculs agrégés
   const totalCapacity = {
     essence: stations.reduce((sum, s) => sum + s.capacite.essence, 0),
     gasoil: stations.reduce((sum, s) => sum + s.capacite.gasoil, 0),
@@ -233,6 +239,7 @@ export default function EntrepriseDetailPage() {
                       src={entreprise.logo} 
                       alt={`Logo ${entreprise.sigle}`}
                       className="h-14 w-14 object-contain"
+                      onError={e => (e.currentTarget.src = '/placeholder-logo.png')}
                     />
                   ) : (
                     <span className="text-2xl font-bold text-primary">
@@ -329,7 +336,6 @@ export default function EntrepriseDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-6">
-                {/* Essence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Essence Super</span>
@@ -352,7 +358,6 @@ export default function EntrepriseDetailPage() {
                   </p>
                 </div>
 
-                {/* Gasoil */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Gasoil</span>
