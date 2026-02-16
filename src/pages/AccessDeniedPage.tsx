@@ -15,9 +15,13 @@ export default function AccessDeniedPage() {
         <h1 className="text-2xl font-bold text-foreground mb-2">Accès Refusé</h1>
         <p className="text-muted-foreground mb-6">
           Vous n'avez pas les permissions nécessaires pour accéder à cette page.
-          {role && (
+          {role ? (
             <span className="block mt-2">
               Votre rôle actuel : <strong>{ROLE_LABELS[role]}</strong>
+            </span>
+          ) : (
+            <span className="block mt-2 text-amber-600 font-medium">
+              Votre compte n'a pas encore de rôle assigné. Veuillez contacter un administrateur.
             </span>
           )}
         </p>

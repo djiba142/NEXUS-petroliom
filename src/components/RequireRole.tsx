@@ -18,8 +18,14 @@ export function RequireRole({ allowedRoles }: RequireRoleProps) {
         );
     }
 
-    if (!user || !role) {
+    if (!user) {
         return <Navigate to="/auth" state={{ from: location }} replace />;
+    }
+
+    if (!role) {
+        // User is logged in but has no role (or role fetch failed/is null)
+        // Redirect to Access Denied to avoid infinite loop with /auth
+        return <Navigate to="/acces-refuse" replace />;
     }
 
     if (!allowedRoles.includes(role)) {

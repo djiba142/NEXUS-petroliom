@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
@@ -31,6 +31,7 @@ export function useRealtimeStations(entrepriseId?: string) {
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const channelRef = useRef<any>(null);
 
   const fetchStations = useCallback(async () => {
     try {
@@ -47,6 +48,7 @@ export function useRealtimeStations(entrepriseId?: string) {
 
       if (error) throw error;
       setStations(data || []);
+      setError(null);
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -57,9 +59,9 @@ export function useRealtimeStations(entrepriseId?: string) {
   useEffect(() => {
     fetchStations();
 
-    // Subscribe to realtime updates
+    // Subscribe to realtime updates - better filtering on client side
     const channel = supabase
-      .channel('stations-realtime')
+      .channel(`stations-realtime-${entrepriseId || 'all'}`)
       .on(
         'postgres_changes',
         {
@@ -69,24 +71,43 @@ export function useRealtimeStations(entrepriseId?: string) {
         },
         (payload: RealtimePostgresChangesPayload<Station>) => {
           if (payload.eventType === 'INSERT') {
-            setStations(prev => [...prev, payload.new as Station]);
+            const newStation = payload.new as Station;
+            // Filter on client side if needed
+            if (entrepriseId && newStation.entreprise_id !== entrepriseId) return;
+            
+            setStations(prev => {
+              // Prevent duplicates
+              if (prev.some(s => s.id === newStation.id)) return prev;
+              return [...prev, newStation];
+            });
           } else if (payload.eventType === 'UPDATE') {
+            const updatedStation = payload.new as Station;
+            if (entrepriseId && updatedStation.entreprise_id !== entrepriseId) return;
+            
             setStations(prev =>
-              prev.map(s => (s.id === (payload.new as Station).id ? payload.new as Station : s))
+              prev.map(s => (s.id === updatedStation.id ? updatedStation : s))
             );
           } else if (payload.eventType === 'DELETE') {
-            setStations(prev =>
-              prev.filter(s => s.id !== (payload.old as { id: string }).id)
-            );
+            const deletedId = (payload.old as { id: string }).id;
+            setStations(prev => prev.filter(s => s.id !== deletedId));
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setError(new Error('Real-time connection failed'));
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [fetchStations]);
+  }, [fetchStations, entrepriseId]);
 
   return { stations, loading, error, refetch: fetchStations };
 }

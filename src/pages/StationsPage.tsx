@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, Plus, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Plus, AlertTriangle, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StationCard } from '@/components/stations/StationCard';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,11 @@ export default function StationsPage() {
   const [regionsList, setRegionsList] = useState<string[]>([]);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [savingStation, setSavingStation] = useState(false);
+  
+  // Pagination
+  const ITEMS_PER_PAGE = 12;
+  const [currentPage, setCurrentPage] = useState(1);
+  
   const [stationForm, setStationForm] = useState({
     nom: '',
     code: '',
@@ -62,6 +67,11 @@ export default function StationsPage() {
   useEffect(() => {
     fetchData();
   }, [currentUserRole, currentUserProfile?.entreprise_id]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedRegion, selectedEntreprise, activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -135,39 +145,54 @@ export default function StationsPage() {
     }
   };
 
-  const filteredStations = stations.filter(s => {
-    const matchesSearch =
-      s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRegion = selectedRegion === 'all' || s.region === selectedRegion;
-    const matchesEntreprise = selectedEntreprise === 'all' || s.entrepriseId === selectedEntreprise;
+  const filteredStations = useMemo(() => {
+    return stations.filter(s => {
+      const matchesSearch =
+        s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.code.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRegion = selectedRegion === 'all' || s.region === selectedRegion;
+      const matchesEntreprise = selectedEntreprise === 'all' || s.entrepriseId === selectedEntreprise;
 
-    if (activeTab === 'critical') {
+      if (activeTab === 'critical') {
+        const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+        const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
+        return matchesSearch && matchesRegion && matchesEntreprise && (essencePercent < 10 || gasoilPercent < 10);
+      }
+      if (activeTab === 'warning') {
+        const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+        const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
+        return matchesSearch && matchesRegion && matchesEntreprise &&
+          ((essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25));
+      }
+
+      return matchesSearch && matchesRegion && matchesEntreprise;
+    });
+  }, [stations, searchQuery, selectedRegion, selectedEntreprise, activeTab]);
+
+  // Paginated stations
+  const paginatedStations = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filteredStations.slice(start, end);
+  }, [filteredStations, currentPage]);
+
+  const totalPages = Math.ceil(filteredStations.length / ITEMS_PER_PAGE);
+
+  const { criticalCount, warningCount } = useMemo(() => {
+    const critical = stations.filter(s => {
       const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
       const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
-      return matchesSearch && matchesRegion && matchesEntreprise && (essencePercent < 10 || gasoilPercent < 10);
-    }
-    if (activeTab === 'warning') {
+      return essencePercent < 10 || gasoilPercent < 10;
+    }).length;
+
+    const warning = stations.filter(s => {
       const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
       const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
-      return matchesSearch && matchesRegion && matchesEntreprise &&
-        ((essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25));
-    }
+      return (essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25);
+    }).length;
 
-    return matchesSearch && matchesRegion && matchesEntreprise;
-  });
-
-  const criticalCount = stations.filter(s => {
-    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
-    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
-    return essencePercent < 10 || gasoilPercent < 10;
-  }).length;
-
-  const warningCount = stations.filter(s => {
-    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
-    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
-    return (essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25);
-  }).length;
+    return { criticalCount: critical, warningCount: warning };
+  }, [stations]);
 
   const canCreateStation =
     currentUserRole === 'super_admin' ||
@@ -179,8 +204,15 @@ export default function StationsPage() {
         ? currentUserProfile?.entreprise_id
         : stationForm.entreprise_id;
 
-    if (!stationForm.nom?.trim() || !stationForm.code?.trim() || !stationForm.adresse?.trim() ||
-        !stationForm.ville?.trim() || !stationForm.region || !entrepriseId) {
+    const missing: string[] = [];
+    if (!stationForm.nom?.trim()) missing.push('Nom');
+    if (!stationForm.code?.trim()) missing.push('Code');
+    if (!stationForm.adresse?.trim()) missing.push('Adresse');
+    if (!stationForm.ville?.trim()) missing.push('Ville');
+    if (!stationForm.region) missing.push('Région');
+    if (!entrepriseId) missing.push('Entreprise');
+
+    if (missing.length > 0) {
       toast({
         variant: 'destructive',
         title: 'Champs obligatoires manquants',
@@ -342,10 +374,8 @@ export default function StationsPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredStations.map(station => (
-              <Link key={station.id} to={`/stations/${station.id}`} className="block hover:scale-[1.02] transition-transform">
-                <StationCard station={station} />
-              </Link>
+            {paginatedStations.map(station => (
+              <StationCard key={station.id} station={station} />
             ))}
           </div>
 
@@ -353,6 +383,63 @@ export default function StationsPage() {
             <div className="text-center py-12 text-muted-foreground">
               <p className="text-lg font-medium">Aucune station trouvée</p>
               <p className="text-sm">Modifiez vos critères ou créez-en une nouvelle</p>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
+              <div className="text-sm text-muted-foreground">
+                Page <span className="font-semibold">{currentPage}</span> sur <span className="font-semibold">{totalPages}</span> 
+                ({filteredStations.length} station{filteredStations.length !== 1 ? 's' : ''})
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Précédent</span>
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNumber}
+                        variant={currentPage === pageNumber ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNumber)}
+                        className="w-9 h-9 p-0"
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="gap-1"
+                >
+                  <span className="hidden sm:inline">Suivant</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +29,8 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
+  const channelRef = useRef<any>(null);
+  const toastShownRef = useRef(new Set<string>());
 
   const fetchAlertes = useCallback(async () => {
     try {
@@ -51,6 +53,9 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
 
       if (error) throw error;
       setAlertes(data || []);
+      setError(null);
+      // Clear toast tracking for new data
+      toastShownRef.current.clear();
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -63,7 +68,7 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
 
     // Subscribe to realtime updates
     const channel = supabase
-      .channel('alertes-realtime')
+      .channel(`alertes-realtime-${entrepriseId || 'all'}-${stationId || 'all'}`)
       .on(
         'postgres_changes',
         {
@@ -80,10 +85,15 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
             if (stationId && newAlerte.station_id !== stationId) return;
             if (onlyUnresolved && newAlerte.resolu) return;
 
-            setAlertes(prev => [newAlerte, ...prev]);
+            setAlertes(prev => {
+              // Prevent duplicates
+              if (prev.some(a => a.id === newAlerte.id)) return prev;
+              return [newAlerte, ...prev];
+            });
 
-            // Show toast notification for new alerts
-            if (showToast) {
+            // Show toast notification once per alert
+            if (showToast && !toastShownRef.current.has(newAlerte.id)) {
+              toastShownRef.current.add(newAlerte.id);
               toast({
                 variant: newAlerte.niveau === 'critique' ? 'destructive' : 'default',
                 title: newAlerte.niveau === 'critique' ? '🚨 Alerte Critique' : '⚠️ Nouvelle Alerte',
@@ -94,7 +104,7 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
             const updatedAlerte = payload.new as Alerte;
             
             if (onlyUnresolved && updatedAlerte.resolu) {
-              // Remove from list if resolved
+              // Remove from list if resolved and filtering for unresolved
               setAlertes(prev => prev.filter(a => a.id !== updatedAlerte.id));
             } else {
               setAlertes(prev =>
@@ -102,20 +112,28 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
               );
             }
           } else if (payload.eventType === 'DELETE') {
-            setAlertes(prev =>
-              prev.filter(a => a.id !== (payload.old as { id: string }).id)
-            );
+            const deletedId = (payload.old as { id: string }).id;
+            setAlertes(prev => prev.filter(a => a.id !== deletedId));
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          setError(new Error('Real-time connection failed'));
+        }
+      });
+
+    channelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, [fetchAlertes, entrepriseId, stationId, onlyUnresolved, showToast, toast]);
 
-  const resolveAlerte = async (alerteId: string) => {
+  const resolveAlerte = useCallback(async (alerteId: string) => {
     const { error } = await supabase
       .from('alertes')
       .update({ resolu: true, resolu_at: new Date().toISOString() })
@@ -123,7 +141,13 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
 
     if (error) throw error;
     await fetchAlertes();
-  };
+  }, [fetchAlertes]);
+
+  // Memoize stats to avoid recalculation
+  const { criticalCount, warningCount } = useMemo(() => ({
+    criticalCount: alertes.filter(a => a.niveau === 'critique').length,
+    warningCount: alertes.filter(a => a.niveau === 'warning').length,
+  }), [alertes]);
 
   return { 
     alertes, 
@@ -131,7 +155,7 @@ export function useRealtimeAlertes(options: UseRealtimeAlertesOptions = {}) {
     error, 
     refetch: fetchAlertes,
     resolveAlerte,
-    criticalCount: alertes.filter(a => a.niveau === 'critique').length,
-    warningCount: alertes.filter(a => a.niveau === 'warning').length,
+    criticalCount,
+    warningCount,
   };
 }

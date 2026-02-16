@@ -95,36 +95,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
 
-      // 1. Fetch Profile (indépendant)
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+      // Execute queries in parallel for better performance
+      const [profileResult, roleResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle()
+      ]);
 
-      if (profileError) {
-        console.warn('Error fetching profile:', profileError);
-      } else if (profileData) {
-        setProfile(profileData as Profile);
+      // Handle Profile Result
+      if (profileResult.error) {
+        console.warn('Error fetching profile:', profileResult.error);
+      } else if (profileResult.data) {
+        setProfile(profileResult.data as Profile);
       }
 
-      // 2. Fetch Role (indépendant)
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (roleError) {
-        console.warn('Error fetching role:', roleError);
+      // Handle Role Result
+      if (roleResult.error) {
+        console.warn('Error fetching role:', roleResult.error);
         // Fallback: Check if user is in user_roles without using single() just in case
         const { data: roleFallback } = await supabase.from('user_roles').select('role').eq('user_id', userId).limit(1);
         if (roleFallback && roleFallback.length > 0) {
           setRole(roleFallback[0].role as AppRole);
+        } else {
+          setRole(null);
         }
-      } else if (roleData) {
-        setRole(roleData.role as AppRole);
+      } else if (roleResult.data) {
+        setRole(roleResult.data.role as AppRole);
+      } else {
+        setRole(null);
       }
+
     } catch (error) {
       console.error('Unexpected error in fetchUserData:', error);
     } finally {

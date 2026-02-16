@@ -1,4 +1,5 @@
 import { MapPin, Phone, User, Fuel, Clock, ChevronRight } from 'lucide-react';
+import { memo } from 'react';
 import { Station } from '@/types';
 import { StockIndicator, StockBadge } from '@/components/dashboard/StockIndicator';
 import { cn } from '@/lib/utils';
@@ -32,7 +33,7 @@ function calculatePercentage(current: number, capacity: number): number {
   return Math.round((current / capacity) * 100);
 }
 
-export function StationCard({ station }: StationCardProps) {
+const StationCardComponent = ({ station }: StationCardProps) => {
   const essencePercent = calculatePercentage(station.stockActuel.essence, station.capacite.essence);
   const gasoilPercent = calculatePercentage(station.stockActuel.gasoil, station.capacite.gasoil);
 
@@ -123,4 +124,18 @@ export function StationCard({ station }: StationCardProps) {
       </div>
     </Link>
   );
-}
+};
+
+// Memoize with custom comparison to prevent unnecessary re-renders
+export const StationCard = memo(StationCardComponent, (prevProps, nextProps) => {
+  // Return true if props are equal (don't re-render)
+  return (
+    prevProps.station.id === nextProps.station.id &&
+    prevProps.station.nom === nextProps.station.nom &&
+    prevProps.station.statut === nextProps.station.statut &&
+    prevProps.station.stockActuel.essence === nextProps.station.stockActuel.essence &&
+    prevProps.station.stockActuel.gasoil === nextProps.station.stockActuel.gasoil &&
+    prevProps.station.capacite.essence === nextProps.station.capacite.essence &&
+    prevProps.station.capacite.gasoil === nextProps.station.capacite.gasoil
+  );
+});

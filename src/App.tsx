@@ -4,31 +4,61 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Suspense, lazy } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireRole } from "@/components/RequireRole";
-import Index from "./pages/Index";
+import { Loader2 } from "lucide-react";
+
+// Eager load critical pages (public pages)
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
-import EntreprisesPage from "./pages/EntreprisesPage";
-import EntrepriseDetailPage from "./pages/EntrepriseDetailPage";
-import StationsPage from "./pages/StationsPage";
-import StationDetailPage from "./pages/StationDetailPage";
-import AlertesPage from "./pages/AlertesPage";
-import UtilisateursPage from "./pages/UtilisateursPage";
-import RapportsPage from "./pages/RapportsPage";
-import ParametresPage from "./pages/ParametresPage";
-import ProfilPage from "./pages/ProfilPage";
-import CartePage from "./pages/CartePage";
-import AProposPage from "./pages/AProposPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 import NotFound from "./pages/NotFound";
 
-// Role-specific dashboards
-import DashboardEntreprise from "./pages/dashboards/DashboardEntreprise";
-import DashboardSuperAdmin from "./pages/dashboards/DashboardSuperAdmin";
+// Lazy load non-critical pages (protected pages)
+const Index = lazy(() => import("./pages/Index"));
+const EntreprisesPage = lazy(() => import("./pages/EntreprisesPage"));
+const EntrepriseDetailPage = lazy(() => import("./pages/EntrepriseDetailPage"));
+const StationsPage = lazy(() => import("./pages/StationsPage"));
+const StationDetailPage = lazy(() => import("./pages/StationDetailPage"));
+const AlertesPage = lazy(() => import("./pages/AlertesPage"));
+const UtilisateursPage = lazy(() => import("./pages/UtilisateursPage"));
+const RapportsPage = lazy(() => import("./pages/RapportsPage"));
+const ParametresPage = lazy(() => import("./pages/ParametresPage"));
+const ProfilPage = lazy(() => import("./pages/ProfilPage"));
+const CartePage = lazy(() => import("./pages/CartePage"));
+const AProposPage = lazy(() => import("./pages/AProposPage"));
 
-const queryClient = new QueryClient();
+// Lazy load dashboards
+const DashboardEntreprise = lazy(() => import("./pages/dashboards/DashboardEntreprise"));
+const DashboardSuperAdmin = lazy(() => import("./pages/dashboards/DashboardSuperAdmin"));
+
+// Loading component for lazy-loaded pages
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen bg-background">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <p className="text-sm text-muted-foreground">Chargement...</p>
+    </div>
+  </div>
+);
+
+// Optimized QueryClient configuration
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -38,7 +68,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Public routes */}
+            {/* Public routes - eager loaded */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/acces-refuse" element={<AccessDeniedPage />} />
@@ -50,7 +80,7 @@ const App = () => (
               </ProtectedRoute>
             }>
               {/* Redirection intelligente gérée par le composant Index ou AuthContext */}
-              <Route index element={<Index />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><Index /></Suspense>} />
             </Route>
 
             <Route path="/dashboard/admin" element={
@@ -58,7 +88,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
-              <Route index element={<DashboardSuperAdmin />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><DashboardSuperAdmin /></Suspense>} />
             </Route>
 
             <Route path="/dashboard/entreprise" element={
@@ -66,7 +96,7 @@ const App = () => (
                 <RequireRole allowedRoles={['responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<DashboardEntreprise />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><DashboardEntreprise /></Suspense>} />
             </Route>
 
 
@@ -78,7 +108,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<CartePage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><CartePage /></Suspense>} />
             </Route>
 
             {/* Entreprises : Admin seulemnent */}
@@ -87,7 +117,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
-              <Route index element={<EntreprisesPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><EntreprisesPage /></Suspense>} />
             </Route>
 
             <Route path="/entreprises/:id" element={
@@ -95,7 +125,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<EntrepriseDetailPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><EntrepriseDetailPage /></Suspense>} />
             </Route>
 
             {/* Stations : Tout le monde a un accès, mais la vue changera selon le rôle */}
@@ -104,7 +134,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<StationsPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><StationsPage /></Suspense>} />
             </Route>
 
             <Route path="/stations/:id" element={
@@ -112,7 +142,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<StationDetailPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><StationDetailPage /></Suspense>} />
             </Route>
 
             {/* Alertes : Tout le monde */}
@@ -121,7 +151,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<AlertesPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><AlertesPage /></Suspense>} />
             </Route>
 
             {/* Rapports : Admin, Entreprise */}
@@ -130,7 +160,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<RapportsPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><RapportsPage /></Suspense>} />
             </Route>
 
             {/* ADMINISTRATION SYSTEME - STRICTEMENT SUPER ADMIN */}
@@ -139,7 +169,7 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
               </ProtectedRoute>
             }>
-              <Route index element={<UtilisateursPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><UtilisateursPage /></Suspense>} />
             </Route>
 
             <Route path="/parametres" element={
@@ -147,19 +177,23 @@ const App = () => (
                 <RequireRole allowedRoles={['super_admin']} />
               </ProtectedRoute>
             }>
-              <Route index element={<ParametresPage />} />
+              <Route index element={<Suspense fallback={<PageLoader />}><ParametresPage /></Suspense>} />
             </Route>
 
             {/* PAGES COMMUNES */}
             <Route path="/profil" element={
               <ProtectedRoute>
-                <ProfilPage />
+                <Suspense fallback={<PageLoader />}>
+                  <ProfilPage />
+                </Suspense>
               </ProtectedRoute>
             } />
 
             <Route path="/a-propos" element={
               <ProtectedRoute>
-                <AProposPage />
+                <Suspense fallback={<PageLoader />}>
+                  <AProposPage />
+                </Suspense>
               </ProtectedRoute>
             } />
 
