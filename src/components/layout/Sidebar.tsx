@@ -40,6 +40,7 @@ const navigation: NavItem[] = [
 
 const dashboardNavigation: NavItem[] = [
   { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
+  { name: 'Commandes', href: '/admin/commandes', icon: FileText, roles: ['super_admin'], badge: 'New' },
   { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
 ];
 
