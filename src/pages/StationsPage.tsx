@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,8 @@ export default function StationsPage() {
     entreprise_id: '',
     capacite_essence: 50000,
     capacite_gasoil: 50000,
+    capacite_gpl: 0,
+    capacite_lubrifiants: 0,
     gestionnaire_nom: '',
     gestionnaire_telephone: '',
     gestionnaire_email: '',
@@ -94,7 +97,6 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
-        logo: s.entreprises?.logo_url || getEnterpriseLogo(s.entreprise_id),
         capacite: {
           essence: s.capacite_essence || 0,
           gasoil: s.capacite_gasoil || 0,
@@ -240,6 +242,8 @@ export default function StationsPage() {
         entreprise_id: '',
         capacite_essence: 50000,
         capacite_gasoil: 50000,
+        capacite_gpl: 0,
+        capacite_lubrifiants: 0,
         gestionnaire_nom: '',
         gestionnaire_telephone: '',
         gestionnaire_email: '',

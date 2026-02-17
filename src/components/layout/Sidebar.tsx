@@ -29,8 +29,7 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  //{ name: 'Accueil', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
-   { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
+  { name: 'Accueil', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
   { name: 'Carte Nationale', href: '/carte', icon: Map, roles: ['super_admin', 'responsable_entreprise'] },
   { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin'] },
   { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'responsable_entreprise'] },
@@ -40,7 +39,8 @@ const navigation: NavItem[] = [
 ];
 
 const dashboardNavigation: NavItem[] = [
- { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
+  { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
+  { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
 ];
 
 const adminNavigation: NavItem[] = [

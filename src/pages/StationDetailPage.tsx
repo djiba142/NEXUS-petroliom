@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StockIndicator, StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockAlerts, prixOfficiels, getEnterpriseLogo } from '@/data/mockData';
-import { supabase } from '@/integrations/supabase/client';
-import { Station } from '@/types';
+import { mockStations, mockAlerts, prixOfficiels } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
 const typeLabels = {
@@ -47,76 +45,7 @@ const mockDeliveries = [
 
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [station, setStation] = useState<Station | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) {
-      setError("Aucun ID dans l'URL");
-      setLoading(false);
-      return;
-    }
-
-    const loadStation = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('stations')
-          .select(`
-            *,
-            entreprises:entreprise_id(nom, sigle, logo_url)
-          `)
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
-        if (!data) throw new Error('Station non trouvée dans la base');
-
-        const mapped: Station = {
-          id: data.id,
-          nom: data.nom,
-          code: data.code,
-          adresse: data.adresse,
-          ville: data.ville,
-          region: data.region,
-          type: data.type || 'urbaine',  // valeur par défaut si null
-          entrepriseId: data.entreprise_id,
-          entrepriseNom: data.entreprises?.nom || 'Inconnu',
-          logo: data.entreprises?.logo_url || getEnterpriseLogo(data.entreprise_id),
-          capacite: {
-            essence: data.capacite_essence || 0,
-            gasoil: data.capacite_gasoil || 0,
-            gpl: data.capacite_gpl || 0,
-            lubrifiants: data.capacite_lubrifiants || 0,
-          },
-          stockActuel: {
-            essence: data.stock_essence || 0,
-            gasoil: data.stock_gasoil || 0,
-            gpl: data.stock_gpl || 0,
-            lubrifiants: data.stock_lubrifiants || 0,
-          },
-          nombrePompes: data.nombre_pompes || 0,
-          gestionnaire: {
-            nom: data.gestionnaire_nom || 'Non assigné',
-            telephone: data.gestionnaire_telephone || '',
-            email: data.gestionnaire_email || '',
-          },
-         statut: data.statut || 'ouverte',  // valeur par défaut si null
-        };
-
-        setStation(mapped);
-      } catch (err: any) {
-        console.error('Erreur chargement station:', err);
-        setError(err.message || 'Impossible de charger la station');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadStation();
-  }, [id]);
-
+  const station = mockStations.find(s => s.id === id);
   const stationAlerts = mockAlerts.filter(a => a.stationId === id && !a.resolu);
 
   if (loading) {
@@ -161,6 +90,22 @@ export default function StationDetailPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
+
+          {/* Entreprise Logo */}
+          <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center flex-shrink-0 border border-border overflow-hidden shadow-sm">
+            {station.entrepriseLogo ? (
+              <img
+                src={station.entrepriseLogo}
+                alt={`Logo ${station.entrepriseNom}`}
+                className="h-10 w-10 object-contain"
+              />
+            ) : (
+              <span className="text-sm font-bold text-primary">
+                {station.entrepriseSigle?.substring(0, 2).toUpperCase() || 'ST'}
+              </span>
+            )}
+          </div>
+
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-foreground">{station.nom}</h1>

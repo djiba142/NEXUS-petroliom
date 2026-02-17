@@ -35,12 +35,12 @@ function calculatePercentage(current: number, capacity: number): number {
 export function StationCard({ station }: StationCardProps) {
   const essencePercent = calculatePercentage(station.stockActuel.essence, station.capacite.essence);
   const gasoilPercent = calculatePercentage(station.stockActuel.gasoil, station.capacite.gasoil);
-  
+
   const hasCritical = essencePercent < 10 || gasoilPercent < 10;
   const hasWarning = !hasCritical && (essencePercent < 25 || gasoilPercent < 25);
 
   return (
-    <Link 
+    <Link
       to={`/stations/${station.id}`}
       className={cn(
         "block stat-card group transition-all duration-200",
@@ -50,46 +50,29 @@ export function StationCard({ station }: StationCardProps) {
       )}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-start gap-3 flex-1">
-          {/* Logo */}
-          <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-border overflow-hidden">
-            {station.logo ? (
-              <img 
-                src={station.logo} 
-                alt={`Logo ${station.entrepriseNom}`}
-                className="h-10 w-10 object-contain"
-              />
-            ) : (
-              <span className="text-lg font-bold text-primary">
-                {station.entrepriseNom.substring(0, 2).toUpperCase()}
-              </span>
-            )}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+              {station.nom}
+            </h3>
+            <span className={cn(
+              "px-2 py-0.5 rounded-full text-[10px] font-medium",
+              statusStyles[station.statut]
+            )}>
+              {statusLabels[station.statut]}
+            </span>
           </div>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-                {station.nom}
-              </h3>
-              <span className={cn(
-                "px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap",
-                statusStyles[station.statut]
-              )}>
-                {statusLabels[station.statut]}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-mono text-xs bg-secondary px-1.5 py-0.5 rounded">
-                {station.code}
-              </span>
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {station.ville}
-              </span>
-            </div>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="font-mono text-xs bg-secondary px-1.5 py-0.5 rounded">
+              {station.code}
+            </span>
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              {station.ville}
+            </span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <StockBadge percentage={Math.min(essencePercent, gasoilPercent)} />
           <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-1 transition-all" />
@@ -98,14 +81,14 @@ export function StationCard({ station }: StationCardProps) {
 
       {/* Stock Levels */}
       <div className="space-y-3 mb-4">
-        <StockIndicator 
-          percentage={essencePercent} 
-          label="Essence" 
+        <StockIndicator
+          percentage={essencePercent}
+          label="Essence"
           size="sm"
         />
-        <StockIndicator 
-          percentage={gasoilPercent} 
-          label="Gasoil" 
+        <StockIndicator
+          percentage={gasoilPercent}
+          label="Gasoil"
           size="sm"
         />
       </div>

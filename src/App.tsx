@@ -23,6 +23,7 @@ import CartePage from "./pages/CartePage";
 import AProposPage from "./pages/AProposPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 import NotFound from "./pages/NotFound";
+import OrdersPage from "./pages/admin/OrdersPage";
 
 // Role-specific dashboards
 import DashboardEntreprise from "./pages/dashboards/DashboardEntreprise";
@@ -140,6 +141,14 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<UtilisateursPage />} />
+            </Route>
+
+            <Route path="/admin/commandes" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<OrdersPage />} />
             </Route>
 
             <Route path="/parametres" element={
