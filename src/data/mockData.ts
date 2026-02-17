@@ -102,6 +102,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '1',
     entrepriseNom: 'TotalEnergies',
+    logo: logoTotalEnergies,
     capacite: { essence: 100000, gasoil: 120000, gpl: 15000, lubrifiants: 5000 },
     stockActuel: { essence: 75000, gasoil: 96000, gpl: 12000, lubrifiants: 4200 },
     nombrePompes: 8,
@@ -120,6 +121,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '1',
     entrepriseNom: 'TotalEnergies',
+    logo: logoTotalEnergies,
     capacite: { essence: 80000, gasoil: 100000, gpl: 10000, lubrifiants: 4000 },
     stockActuel: { essence: 8000, gasoil: 85000, gpl: 8500, lubrifiants: 3500 },
     nombrePompes: 6,
@@ -137,6 +139,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '1',
     entrepriseNom: 'TotalEnergies',
+    logo: logoTotalEnergies,
     capacite: { essence: 90000, gasoil: 110000, gpl: 12000, lubrifiants: 4500 },
     stockActuel: { essence: 81000, gasoil: 99000, gpl: 10800, lubrifiants: 4050 },
     nombrePompes: 7,
@@ -157,6 +160,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '2',
     entrepriseNom: 'Shell',
+    logo: logoShell,
     capacite: { essence: 95000, gasoil: 115000, gpl: 12000, lubrifiants: 5000 },
     stockActuel: { essence: 85500, gasoil: 103500, gpl: 10800, lubrifiants: 4500 },
     nombrePompes: 8,
@@ -174,6 +178,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '2',
     entrepriseNom: 'Shell',
+    logo: logoShell,
     capacite: { essence: 85000, gasoil: 100000, gpl: 10000, lubrifiants: 4000 },
     stockActuel: { essence: 5100, gasoil: 8000, gpl: 1000, lubrifiants: 400 },
     nombrePompes: 6,
@@ -191,6 +196,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '2',
     entrepriseNom: 'Shell',
+    logo: logoShell,
     capacite: { essence: 75000, gasoil: 90000, gpl: 8000, lubrifiants: 3500 },
     stockActuel: { essence: 67500, gasoil: 81000, gpl: 7200, lubrifiants: 3150 },
     nombrePompes: 5,
@@ -211,6 +217,7 @@ export const mockStations: Station[] = [
     type: 'routiere',
     entrepriseId: '3',
     entrepriseNom: 'TMI',
+    logo: logoTMI,
     capacite: { essence: 150000, gasoil: 200000, gpl: 20000, lubrifiants: 8000 },
     stockActuel: { essence: 22500, gasoil: 180000, gpl: 18000, lubrifiants: 7200 },
     nombrePompes: 12,
@@ -228,6 +235,7 @@ export const mockStations: Station[] = [
     type: 'routiere',
     entrepriseId: '3',
     entrepriseNom: 'TMI',
+    logo: logoTMI,
     capacite: { essence: 80000, gasoil: 120000, gpl: 10000, lubrifiants: 5000 },
     stockActuel: { essence: 72000, gasoil: 108000, gpl: 9000, lubrifiants: 4500 },
     nombrePompes: 6,
@@ -248,6 +256,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '4',
     entrepriseNom: 'Star Oil',
+    // logo: undefined,
     capacite: { essence: 120000, gasoil: 150000, gpl: 15000, lubrifiants: 6000 },
     stockActuel: { essence: 108000, gasoil: 135000, gpl: 13500, lubrifiants: 5400 },
     nombrePompes: 10,
@@ -265,6 +274,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '4',
     entrepriseNom: 'Star Oil',
+    // logo: undefined,
     capacite: { essence: 90000, gasoil: 110000, gpl: 10000, lubrifiants: 4500 },
     stockActuel: { essence: 9000, gasoil: 11000, gpl: 1000, lubrifiants: 450 },
     nombrePompes: 7,
@@ -285,6 +295,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '5',
     entrepriseNom: 'Kamsar Petroleum',
+    logo: logoKP,
     capacite: { essence: 80000, gasoil: 100000, gpl: 10000, lubrifiants: 4000 },
     stockActuel: { essence: 72000, gasoil: 90000, gpl: 9000, lubrifiants: 3600 },
     nombrePompes: 6,
@@ -302,6 +313,7 @@ export const mockStations: Station[] = [
     type: 'urbaine',
     entrepriseId: '5',
     entrepriseNom: 'Kamsar Petroleum',
+    logo: logoKP,
     capacite: { essence: 70000, gasoil: 85000, gpl: 8000, lubrifiants: 3500 },
     stockActuel: { essence: 63000, gasoil: 76500, gpl: 7200, lubrifiants: 3150 },
     nombrePompes: 5,
@@ -319,6 +331,7 @@ export const mockStations: Station[] = [
     type: 'routiere',
     entrepriseId: '5',
     entrepriseNom: 'Kamsar Petroleum',
+    logo: logoKP,
     capacite: { essence: 200000, gasoil: 250000, gpl: 25000, lubrifiants: 10000 },
     stockActuel: { essence: 180000, gasoil: 225000, gpl: 22500, lubrifiants: 9000 },
     nombrePompes: 14,
@@ -413,3 +426,13 @@ export const prixOfficiels = {
   gpl: 8500,
   devise: 'GNF'
 };
+
+// Function to get enterprise logo by ID or sigle
+export function getEnterpriseLogo(entrepriseId: string): string | undefined {
+  // First try by ID
+  let entreprise = mockEntreprises.find(e => e.id === entrepriseId);
+  if (entreprise?.logo) return entreprise.logo;
+  
+  // If not found or no logo, return undefined - will fallback to initials
+  return undefined;
+}

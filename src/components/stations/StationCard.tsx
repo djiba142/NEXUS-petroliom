@@ -50,26 +50,43 @@ export function StationCard({ station }: StationCardProps) {
       )}
     >
       <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-              {station.nom}
-            </h3>
-            <span className={cn(
-              "px-2 py-0.5 rounded-full text-[10px] font-medium",
-              statusStyles[station.statut]
-            )}>
-              {statusLabels[station.statut]}
-            </span>
+        <div className="flex items-start gap-3 flex-1">
+          {/* Logo */}
+          <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-border overflow-hidden">
+            {station.logo ? (
+              <img 
+                src={station.logo} 
+                alt={`Logo ${station.entrepriseNom}`}
+                className="h-10 w-10 object-contain"
+              />
+            ) : (
+              <span className="text-lg font-bold text-primary">
+                {station.entrepriseNom.substring(0, 2).toUpperCase()}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="font-mono text-xs bg-secondary px-1.5 py-0.5 rounded">
-              {station.code}
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
-              {station.ville}
-            </span>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                {station.nom}
+              </h3>
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap",
+                statusStyles[station.statut]
+              )}>
+                {statusLabels[station.statut]}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="font-mono text-xs bg-secondary px-1.5 py-0.5 rounded">
+                {station.code}
+              </span>
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3.5 w-3.5" />
+                {station.ville}
+              </span>
+            </div>
           </div>
         </div>
         

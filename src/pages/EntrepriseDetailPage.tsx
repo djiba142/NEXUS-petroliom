@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { getEnterpriseLogo } from '@/data/mockData';
 import type { Entreprise, Station, Alert } from '@/types';
 
 const getStockPercentage = (current: number, capacity: number) => {
@@ -82,12 +83,14 @@ export default function EntrepriseDetailPage() {
           .select('*')
           .eq('id', id)
           .maybeSingle();
+
         if (entErr) throw entErr;
         if (!entData) {
           setEntreprise(null);
           setLoading(false);
           return;
         }
+
         setEntreprise({
           id: entData.id,
           nom: entData.nom,
@@ -107,9 +110,11 @@ export default function EntrepriseDetailPage() {
 
         const { data: stData, error: stErr } = await supabase
           .from('stations')
-          .select('*')
+          .select('*, entreprises:entreprise_id(nom, sigle, logo_url)')
           .eq('entreprise_id', id);
+
         if (stErr) throw stErr;
+
         setStations((stData || []).map(s => ({
           id: s.id,
           nom: s.nom,
@@ -120,6 +125,7 @@ export default function EntrepriseDetailPage() {
           type: s.type as 'urbaine' | 'routiere' | 'depot',
           entrepriseId: s.entreprise_id,
           entrepriseNom: entData.nom,
+          logo: s.entreprises?.logo_url || getEnterpriseLogo(s.entreprise_id),
           capacite: {
             essence: s.capacite_essence,
             gasoil: s.capacite_gasoil,
@@ -146,7 +152,9 @@ export default function EntrepriseDetailPage() {
           .select('*, station:stations(nom)')
           .eq('entreprise_id', id)
           .eq('resolu', false);
+
         if (alertErr) throw alertErr;
+
         setAlerts((alertData || []).map(a => ({
           id: a.id,
           type: a.type as any,
@@ -167,7 +175,7 @@ export default function EntrepriseDetailPage() {
     };
     fetchData();
   }, [id]);
-  
+
   if (loading) {
     return (
       <DashboardLayout title="Chargement...">
@@ -192,7 +200,7 @@ export default function EntrepriseDetailPage() {
     );
   }
 
-  // Calculate aggregate stats
+  // Calculs agrégés
   const totalCapacity = {
     essence: stations.reduce((sum, s) => sum + s.capacite.essence, 0),
     gasoil: stations.reduce((sum, s) => sum + s.capacite.gasoil, 0),
@@ -233,6 +241,7 @@ export default function EntrepriseDetailPage() {
                       src={entreprise.logo} 
                       alt={`Logo ${entreprise.sigle}`}
                       className="h-14 w-14 object-contain"
+                      onError={e => (e.currentTarget.src = '/placeholder-logo.png')}
                     />
                   ) : (
                     <span className="text-2xl font-bold text-primary">
@@ -329,7 +338,6 @@ export default function EntrepriseDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-6">
-                {/* Essence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Essence Super</span>
@@ -352,7 +360,6 @@ export default function EntrepriseDetailPage() {
                   </p>
                 </div>
 
-                {/* Gasoil */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Gasoil</span>

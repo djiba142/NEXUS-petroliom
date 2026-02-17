@@ -1,12 +1,15 @@
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, MapPin, Phone, Mail, User, Fuel, Clock, Building2, Gauge, AlertTriangle, TrendingUp, Truck, Calendar } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, User, Fuel, Clock, Building2, Gauge, AlertTriangle, TrendingUp, Truck, Calendar, Loader2 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StockIndicator, StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockStations, mockAlerts, prixOfficiels } from '@/data/mockData';
+import { mockAlerts, prixOfficiels, getEnterpriseLogo } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { Station } from '@/types';
 import { cn } from '@/lib/utils';
 
 const typeLabels = {
@@ -30,33 +33,112 @@ const statusLabels = {
 };
 
 function calculatePercentage(current: number, capacity: number): number {
-  return Math.round((current / capacity) * 100);
+  return capacity > 0 ? Math.round((current / capacity) * 100) : 0;
 }
 
 function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-GN').format(num);
 }
 
-// Mock delivery history for demo
 const mockDeliveries = [
   { id: '1', date: '2026-01-30', carburant: 'Essence', quantite: 35000, fournisseur: 'SGPG', camion: 'GN-1234-AB', responsable: 'Amadou Bah' },
   { id: '2', date: '2026-01-25', carburant: 'Gasoil', quantite: 28000, fournisseur: 'SGPG', camion: 'GN-5678-CD', responsable: 'Mamadou Diallo' },
-  { id: '3', date: '2026-01-20', carburant: 'Essence', quantite: 30000, fournisseur: 'SGPG', camion: 'GN-9012-EF', responsable: 'Ibrahim Sow' },
-  { id: '4', date: '2026-01-15', carburant: 'GPL', quantite: 8000, fournisseur: 'SGPG', camion: 'GN-3456-GH', responsable: 'Oumar Barry' },
 ];
 
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const station = mockStations.find(s => s.id === id);
+  const [station, setStation] = useState<Station | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!id) {
+      setError("Aucun ID dans l'URL");
+      setLoading(false);
+      return;
+    }
+
+    const loadStation = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('stations')
+          .select(`
+            *,
+            entreprises:entreprise_id(nom, sigle, logo_url)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error('Station non trouvée dans la base');
+
+        const mapped: Station = {
+          id: data.id,
+          nom: data.nom,
+          code: data.code,
+          adresse: data.adresse,
+          ville: data.ville,
+          region: data.region,
+          type: data.type || 'urbaine',  // valeur par défaut si null
+          entrepriseId: data.entreprise_id,
+          entrepriseNom: data.entreprises?.nom || 'Inconnu',
+          logo: data.entreprises?.logo_url || getEnterpriseLogo(data.entreprise_id),
+          capacite: {
+            essence: data.capacite_essence || 0,
+            gasoil: data.capacite_gasoil || 0,
+            gpl: data.capacite_gpl || 0,
+            lubrifiants: data.capacite_lubrifiants || 0,
+          },
+          stockActuel: {
+            essence: data.stock_essence || 0,
+            gasoil: data.stock_gasoil || 0,
+            gpl: data.stock_gpl || 0,
+            lubrifiants: data.stock_lubrifiants || 0,
+          },
+          nombrePompes: data.nombre_pompes || 0,
+          gestionnaire: {
+            nom: data.gestionnaire_nom || 'Non assigné',
+            telephone: data.gestionnaire_telephone || '',
+            email: data.gestionnaire_email || '',
+          },
+         statut: data.statut || 'ouverte',  // valeur par défaut si null
+        };
+
+        setStation(mapped);
+      } catch (err: any) {
+        console.error('Erreur chargement station:', err);
+        setError(err.message || 'Impossible de charger la station');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStation();
+  }, [id]);
+
   const stationAlerts = mockAlerts.filter(a => a.stationId === id && !a.resolu);
 
-  if (!station) {
+  if (loading) {
+    return (
+      <DashboardLayout title="Chargement...">
+        <div className="flex flex-col items-center justify-center h-96">
+          <Loader2 className="h-12 w-12 animate-spin mb-4" />
+          <p>Chargement de la station...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error || !station) {
     return (
       <DashboardLayout title="Station non trouvée">
         <div className="flex flex-col items-center justify-center h-96">
           <AlertTriangle className="h-16 w-16 text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">Station non trouvée</h2>
-          <p className="text-muted-foreground mb-4">La station demandée n'existe pas.</p>
+          <p className="text-muted-foreground mb-6 max-w-md text-center">
+            {error || `Aucune station trouvée avec l'ID "${id}" dans la base de données.`}
+          </p>
           <Button asChild>
             <Link to="/stations">Retour aux stations</Link>
           </Button>
@@ -73,7 +155,6 @@ export default function StationDetailPage() {
   return (
     <DashboardLayout title={station.nom} subtitle={`${station.code} - ${station.ville}`}>
       <div className="space-y-6">
-        {/* Header with back button */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
             <Link to="/stations">
@@ -83,8 +164,8 @@ export default function StationDetailPage() {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-foreground">{station.nom}</h1>
-              <Badge className={cn("text-xs", statusStyles[station.statut])}>
-                {statusLabels[station.statut]}
+              <Badge className={cn("text-xs", statusStyles[station.statut] || 'bg-gray-100 text-gray-700')}>
+                {statusLabels[station.statut] || station.statut || 'Inconnu'}
               </Badge>
             </div>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -98,7 +179,6 @@ export default function StationDetailPage() {
           <StockBadge percentage={Math.min(essencePercent, gasoilPercent)} size="lg" />
         </div>
 
-        {/* Alerts Banner */}
         {stationAlerts.length > 0 && (
           <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -112,7 +192,7 @@ export default function StationDetailPage() {
                 <div key={alert.id} className="flex items-center gap-2 text-sm">
                   <span className={cn(
                     "w-2 h-2 rounded-full",
-                    alert.niveau === 'critique' ? 'bg-stock-critical' : 'bg-stock-warning'
+                    alert.niveau === 'critique' ? 'bg-red-600' : 'bg-amber-600'
                   )} />
                   <span className="text-foreground">{alert.message}</span>
                   <span className="text-muted-foreground text-xs">
@@ -124,11 +204,8 @@ export default function StationDetailPage() {
           </div>
         )}
 
-        {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Info & Stocks */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Section 1: Informations générales */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -140,7 +217,7 @@ export default function StationDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Type de station</p>
-                    <p className="font-medium">{typeLabels[station.type]}</p>
+                    <p className="font-medium">{typeLabels[station.type] || station.type || 'Non défini'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Entreprise</p>
@@ -163,17 +240,10 @@ export default function StationDetailPage() {
                     <p className="text-xs text-muted-foreground mb-1">Ville</p>
                     <p className="font-medium">{station.ville}</p>
                   </div>
-                  {station.coordonnees && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Coordonnées GPS</p>
-                      <p className="font-mono text-sm">{station.coordonnees.lat}, {station.coordonnees.lng}</p>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Section 2: Stocks actuels */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -183,7 +253,6 @@ export default function StationDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
-                  {/* Essence */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Essence</span>
@@ -194,7 +263,6 @@ export default function StationDetailPage() {
                     <StockIndicator percentage={essencePercent} label="" size="md" />
                   </div>
 
-                  {/* Gasoil */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Gasoil</span>
@@ -205,7 +273,6 @@ export default function StationDetailPage() {
                     <StockIndicator percentage={gasoilPercent} label="" size="md" />
                   </div>
 
-                  {/* GPL */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">GPL</span>
@@ -216,7 +283,6 @@ export default function StationDetailPage() {
                     <StockIndicator percentage={gplPercent} label="" size="md" />
                   </div>
 
-                  {/* Lubrifiants */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">Lubrifiants</span>
@@ -230,13 +296,8 @@ export default function StationDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Stock Evolution Chart */}
-            <StockEvolutionChart 
-              stationId={id} 
-              title="Évolution des stocks de la station" 
-            />
+            <StockEvolutionChart stationId={id} title="Évolution des stocks de la station" />
 
-            {/* Section 3: Historique des livraisons */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -282,9 +343,7 @@ export default function StationDetailPage() {
             </Card>
           </div>
 
-          {/* Right Column - Manager, Prices, Capacities */}
           <div className="space-y-6">
-            {/* Prix officiels */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -310,7 +369,6 @@ export default function StationDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Gestionnaire */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -330,26 +388,29 @@ export default function StationDetailPage() {
                     </div>
                   </div>
                   <div className="space-y-2 pt-2">
-                    <a 
-                      href={`tel:${station.gestionnaire.telephone}`}
-                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                    >
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      {station.gestionnaire.telephone}
-                    </a>
-                    <a 
-                      href={`mailto:${station.gestionnaire.email}`}
-                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                    >
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      {station.gestionnaire.email}
-                    </a>
+                    {station.gestionnaire.telephone && (
+                      <a 
+                        href={`tel:${station.gestionnaire.telephone}`}
+                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                      >
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        {station.gestionnaire.telephone}
+                      </a>
+                    )}
+                    {station.gestionnaire.email && (
+                      <a 
+                        href={`mailto:${station.gestionnaire.email}`}
+                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                      >
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        {station.gestionnaire.email}
+                      </a>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Capacités de stockage */}
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -378,36 +439,6 @@ export default function StationDetailPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Dernière livraison */}
-            {station.derniereLivraison && (
-              <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Clock className="h-5 w-5 text-primary" />
-                    Dernière livraison
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-sm">Date</span>
-                      <span className="font-medium">
-                        {new Date(station.derniereLivraison.date).toLocaleDateString('fr-FR')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-sm">Carburant</span>
-                      <Badge variant="outline">{station.derniereLivraison.carburant}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-sm">Quantité</span>
-                      <span className="font-mono">{formatNumber(station.derniereLivraison.quantite)} L</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>
