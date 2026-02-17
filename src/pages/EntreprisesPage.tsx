@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, Loader2 } from 'lucide-react';
+import { Search, Plus, Loader2, Upload } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { EntrepriseCard } from '@/components/entreprises/EntrepriseCard';
 import { regions } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +38,9 @@ export default function EntreprisesPage() {
   const [selectedType, setSelectedType] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<{
     nom: string;
     sigle: string;
@@ -53,15 +61,34 @@ export default function EntreprisesPage() {
     contactEmail: '',
   });
 
+  const localLogoMapping: Record<string, string> = {
+    'TOTAL': logoTotal,
+    'TotalEnergies': logoTotal,
+    'TO': logoTotal,
+    'SHELL': logoShell,
+    'VIVO': logoShell,
+    'SH': logoShell,
+    'TMI': logoTMI,
+    'TM': logoTMI,
+    'KP': logoKP,
+  };
+
   const { toast } = useToast();
 
   const fetchEntreprises = async () => {
     setLoading(true);
     try {
-      const { data: entData, error } = await supabase.from('entreprises').select('*').order('nom');
+      const { data: entData, error } = await supabase
+        .from('entreprises')
+        .select('*')
+        .order('nom');
+
       if (error) throw error;
 
-      const { data: stationCounts } = await supabase.from('stations').select('entreprise_id');
+      const { data: stationCounts } = await supabase
+        .from('stations')
+        .select('entreprise_id');
+
       const counts = (stationCounts || []).reduce<Record<string, number>>((acc, s) => {
         const id = s.entreprise_id;
         acc[id] = (acc[id] || 0) + 1;
@@ -77,13 +104,14 @@ export default function EntreprisesPage() {
         region: e.region,
         statut: e.statut as 'actif' | 'suspendu' | 'ferme',
         nombreStations: counts[e.id] ?? 0,
-        logo: e.logo_url ?? undefined,
+        logo: e.logo_url || localLogoMapping[e.sigle] || undefined,
         contact: {
           nom: e.contact_nom || 'N/A',
           telephone: e.contact_telephone || '',
           email: e.contact_email || '',
         },
       }));
+
       setEntreprises(mapped);
     } catch (err: unknown) {
       toast({
@@ -102,46 +130,98 @@ export default function EntreprisesPage() {
 
   const filteredEntreprises = entreprises.filter(e => {
     const matchesSearch = e.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          e.sigle.toLowerCase().includes(searchQuery.toLowerCase());
+      e.sigle.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRegion = selectedRegion === 'all' || e.region === selectedRegion;
     const matchesType = selectedType === 'all' || e.type === selectedType;
     return matchesSearch && matchesRegion && matchesType;
   });
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({
+          variant: 'destructive',
+          title: 'Fichier trop volumineux',
+          description: 'La taille maximale est de 2 Mo.',
+        });
+        return;
+      }
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setLogoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadLogo = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(filePath, file, {
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('logos').getPublicUrl(filePath);
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error('Erreur upload logo:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur upload',
+        description: 'Impossible de télécharger le logo.',
+      });
+      return null;
+    }
+  };
+
   const handleSaveEntreprise = async () => {
-    if (!formData.nom || !formData.sigle || !formData.type || !formData.region) {
+    if (!formData.nom.trim() || !formData.sigle.trim() || !formData.type || !formData.region) {
       toast({
         variant: 'destructive',
         title: 'Champs obligatoires manquants',
-        description: 'Veuillez renseigner au minimum le nom, le sigle, le type et la région de l’entreprise.',
+        description: 'Nom, sigle, type et région sont requis.',
       });
       return;
     }
 
-    const numeroAgrement = formData.numeroAgrement.trim() || `AGR-${Date.now()}`;
-
     setSaving(true);
+
     try {
-      const { error } = await supabase
-        .from('entreprises')
-        .insert({
-          nom: formData.nom.trim(),
-          sigle: formData.sigle.trim(),
-          type: formData.type,
-          region: formData.region,
-          numero_agrement: numeroAgrement,
-          statut: 'actif',
-          contact_nom: formData.contactNom.trim() || null,
-          contact_telephone: formData.contactTelephone.trim() || null,
-          contact_email: formData.contactEmail.trim() || null,
-        });
+      let logoUrl: string | null = null;
+      if (logoFile) {
+        logoUrl = await uploadLogo(logoFile);
+      }
+
+      const numeroAgrement = formData.numeroAgrement.trim() || `AGR-${Date.now()}`;
+
+      const { error } = await supabase.from('entreprises').insert({
+        nom: formData.nom.trim(),
+        sigle: formData.sigle.trim(),
+        type: formData.type,
+        numero_agrement: numeroAgrement,
+        region: formData.region,
+        statut: 'actif',
+        logo_url: logoUrl,
+        contact_nom: formData.contactNom.trim() || null,
+        contact_telephone: formData.contactTelephone.trim() || null,
+        contact_email: formData.contactEmail.trim() || null,
+      });
 
       if (error) throw error;
 
       toast({
-        title: 'Entreprise enregistrée',
+        title: 'Succès',
         description: `${formData.nom} a été créée avec succès.`,
       });
+
       setFormData({
         nom: '',
         sigle: '',
@@ -152,13 +232,15 @@ export default function EntreprisesPage() {
         contactTelephone: '',
         contactEmail: '',
       });
+      setLogoFile(null);
+      setLogoPreview(null);
       setIsDialogOpen(false);
-      fetchEntreprises();
-    } catch (err: unknown) {
+      await fetchEntreprises();
+    } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: "Erreur lors de l'enregistrement",
-        description: err instanceof Error ? err.message : "Impossible d'enregistrer l'entreprise.",
+        title: 'Erreur',
+        description: err.message || 'Impossible d’enregistrer l’entreprise.',
       });
     } finally {
       setSaving(false);
@@ -166,11 +248,11 @@ export default function EntreprisesPage() {
   };
 
   return (
-    <DashboardLayout 
-      title="Entreprises" 
+    <DashboardLayout
+      title="Entreprises"
       subtitle="Gestion des distributeurs d'hydrocarbures"
     >
-      {/* Filters */}
+      {/* Filtres */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -181,7 +263,7 @@ export default function EntreprisesPage() {
             className="pl-10"
           />
         </div>
-        
+
         <Select value={selectedRegion} onValueChange={setSelectedRegion}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Région" />
@@ -211,7 +293,7 @@ export default function EntreprisesPage() {
         </Button>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats */}
       <div className="flex items-center gap-6 mb-6 p-4 bg-secondary/50 rounded-xl">
         <div>
           <p className="text-sm text-muted-foreground">Total</p>
@@ -233,11 +315,11 @@ export default function EntreprisesPage() {
         </div>
       </div>
 
-      {/* Entreprises Grid */}
+      {/* Liste */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-          <Loader2 className="h-12 w-12 animate-spin mb-4 opacity-20" />
-          <p>Chargement des entreprises...</p>
+          <Loader2 className="h-12 w-12 animate-spin mb-4" />
+          <p>Chargement...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -247,131 +329,165 @@ export default function EntreprisesPage() {
         </div>
       )}
 
-      {!loading && filteredEntreprises.length === 0 && (
+      {filteredEntreprises.length === 0 && !loading && (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-lg font-medium">Aucune entreprise trouvée</p>
-          <p className="text-sm">Modifiez vos critères de recherche</p>
+          <p className="text-sm">Modifiez vos filtres</p>
         </div>
       )}
 
+      {/* Dialog création - avec scroll et footer sticky */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
             <DialogTitle>Nouvelle entreprise</DialogTitle>
             <DialogDescription>
-              Renseignez les informations principales de l&apos;entreprise.
+              Renseignez les informations principales de l’entreprise.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="nom">Nom de l&apos;entreprise *</Label>
-              <Input
-                id="nom"
-                value={formData.nom}
-                onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                placeholder="Ex: TotalEnergies Guinée"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sigle">Sigle *</Label>
-              <Input
-                id="sigle"
-                value={formData.sigle}
-                onChange={(e) => setFormData({ ...formData, sigle: e.target.value })}
-                placeholder="Ex: TOTAL"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Zone scrollable */}
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="space-y-5">
+              {/* Logo */}
               <div className="space-y-2">
-                <Label>Type *</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: 'compagnie' | 'distributeur') =>
-                    setFormData({ ...formData, type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="compagnie">Compagnie</SelectItem>
-                    <SelectItem value="distributeur">Distributeur</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Logo (optionnel)</Label>
+                <div className="flex items-center gap-4">
+                  <div className="h-20 w-20 rounded-lg border overflow-hidden bg-muted flex items-center justify-center">
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Prévisualisation" className="h-full w-full object-cover" />
+                    ) : (
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif"
+                      onChange={handleLogoChange}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      PNG, JPG ou GIF – max 2 Mo
+                    </p>
+                  </div>
+                </div>
               </div>
 
+              {/* Nom */}
               <div className="space-y-2">
-                <Label>Région *</Label>
-                <Select
-                  value={formData.region}
-                  onValueChange={(value) => setFormData({ ...formData, region: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {regions.map((region) => (
-                      <SelectItem key={region} value={region}>
-                        {region}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="agrement">N° d&apos;agrément</Label>
-              <Input
-                id="agrement"
-                value={formData.numeroAgrement}
-                onChange={(e) => setFormData({ ...formData, numeroAgrement: e.target.value })}
-                placeholder="Ex: AGR-2026-001"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="contactNom">Contact principal</Label>
+                <Label>Nom *</Label>
                 <Input
-                  id="contactNom"
-                  value={formData.contactNom}
-                  onChange={(e) => setFormData({ ...formData, contactNom: e.target.value })}
-                  placeholder="Nom et prénom"
+                  value={formData.nom}
+                  onChange={e => setFormData({...formData, nom: e.target.value})}
+                  placeholder="Ex: TotalEnergies Guinée"
                 />
               </div>
+
+              {/* Sigle */}
               <div className="space-y-2">
-                <Label htmlFor="contactTelephone">Téléphone</Label>
+                <Label>Sigle *</Label>
                 <Input
-                  id="contactTelephone"
-                  value={formData.contactTelephone}
-                  onChange={(e) => setFormData({ ...formData, contactTelephone: e.target.value })}
-                  placeholder="+224 6XX XX XX XX"
+                  value={formData.sigle}
+                  onChange={e => setFormData({...formData, sigle: e.target.value})}
+                  placeholder="Ex: TOTAL"
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="contactEmail">Email</Label>
-              <Input
-                id="contactEmail"
-                type="email"
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                placeholder="contact@entreprise.gn"
-              />
+              {/* Type + Région */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Type *</Label>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(v: 'compagnie' | 'distributeur') => 
+                      setFormData({...formData, type: v})
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="compagnie">Compagnie</SelectItem>
+                      <SelectItem value="distributeur">Distributeur</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Région *</Label>
+                  <Select
+                    value={formData.region}
+                    onValueChange={v => setFormData({...formData, region: v})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regions.map(r => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Agrément */}
+              <div className="space-y-2">
+                <Label>N° agrément</Label>
+                <Input
+                  value={formData.numeroAgrement}
+                  onChange={e => setFormData({...formData, numeroAgrement: e.target.value})}
+                  placeholder="Ex: AGR-2026-001"
+                />
+              </div>
+
+              {/* Contact */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Contact</Label>
+                  <Input
+                    value={formData.contactNom}
+                    onChange={e => setFormData({...formData, contactNom: e.target.value})}
+                    placeholder="Nom complet"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Téléphone</Label>
+                  <Input
+                    value={formData.contactTelephone}
+                    onChange={e => setFormData({...formData, contactTelephone: e.target.value})}
+                    placeholder="+224 6XX XX XX XX"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={e => setFormData({...formData, contactEmail: e.target.value})}
+                  placeholder="contact@entreprise.gn"
+                />
+              </div>
             </div>
           </div>
 
-          <DialogFooter>
+          {/* Footer sticky */}
+          <DialogFooter className="sticky bottom-0 bg-background px-6 py-4 border-t mt-auto">
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleSaveEntreprise} disabled={saving}>
-              {saving ? 'Enregistrement...' : 'Enregistrer'}
+            <Button 
+              onClick={handleSaveEntreprise} 
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : 'Créer'}
             </Button>
           </DialogFooter>
         </DialogContent>

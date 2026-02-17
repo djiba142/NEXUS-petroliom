@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,7 @@ export default function StationsPage() {
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
   const [stations, setStations] = useState<Station[]>([]);
-  const [entreprises, setEntreprises] = useState<{ id: string, nom: string, sigle: string }[]>([]);
+  const [entreprises, setEntreprises] = useState<{ id: string; nom: string; sigle: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [regionsList, setRegionsList] = useState<string[]>([]);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
@@ -51,6 +52,8 @@ export default function StationsPage() {
     entreprise_id: '',
     capacite_essence: 50000,
     capacite_gasoil: 50000,
+    capacite_gpl: 0,
+    capacite_lubrifiants: 0,
     gestionnaire_nom: '',
     gestionnaire_telephone: '',
     gestionnaire_email: '',
@@ -63,14 +66,17 @@ export default function StationsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch entreprises for filters
-      const { data: entData } = await supabase.from('entreprises').select('id, nom, sigle');
+      // Entreprises
+      const { data: entData, error: entError } = await supabase
+        .from('entreprises')
+        .select('id, nom, sigle');
+      if (entError) throw entError;
       setEntreprises(entData || []);
 
-      // 2. Fetch stations with RBAC filtering
+      // Stations
       let query = supabase.from('stations').select(`
         *,
-        entreprises:entreprise_id(nom, sigle)
+        entreprises:entreprise_id(nom, sigle, logo_url)
       `);
 
       if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
@@ -80,7 +86,6 @@ export default function StationsPage() {
       const { data: stData, error: stError } = await query;
       if (stError) throw stError;
 
-      // 3. Map to Station type
       const mappedStations: Station[] = (stData || []).map(s => ({
         id: s.id,
         nom: s.nom,
@@ -91,19 +96,21 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
+        entrepriseSigle: s.entreprises?.sigle || '',
+        entrepriseLogo: s.entreprises?.logo_url || localLogoMapping[s.entreprises?.sigle || ''] || undefined,
         capacite: {
-          essence: s.capacite_essence,
-          gasoil: s.capacite_gasoil,
-          gpl: s.capacite_gpl,
-          lubrifiants: s.capacite_lubrifiants,
+          essence: s.capacite_essence || 0,
+          gasoil: s.capacite_gasoil || 0,
+          gpl: s.capacite_gpl || 0,
+          lubrifiants: s.capacite_lubrifiants || 0,
         },
         stockActuel: {
-          essence: s.stock_essence,
-          gasoil: s.stock_gasoil,
-          gpl: s.stock_gpl,
-          lubrifiants: s.stock_lubrifiants,
+          essence: s.stock_essence || 0,
+          gasoil: s.stock_gasoil || 0,
+          gpl: s.stock_gpl || 0,
+          lubrifiants: s.stock_lubrifiants || 0,
         },
-        nombrePompes: s.nombre_pompes,
+        nombrePompes: s.nombre_pompes || 0,
         gestionnaire: {
           nom: s.gestionnaire_nom || 'Non assigné',
           telephone: s.gestionnaire_telephone || '',
@@ -114,31 +121,35 @@ export default function StationsPage() {
 
       setStations(mappedStations);
 
-      // Extract unique regions
-      const uniqueRegions = Array.from(new Set(mappedStations.map(s => s.region)));
+      const uniqueRegions = Array.from(new Set(mappedStations.map(s => s.region).filter(Boolean)));
       setRegionsList(uniqueRegions);
-
     } catch (error) {
-      console.error('Error fetching stations:', error);
+      console.error('Erreur chargement données:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible de charger les stations',
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const filteredStations = stations.filter(s => {
-    const matchesSearch = s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.code.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRegion = selectedRegion === 'all' || s.region === selectedRegion;
     const matchesEntreprise = selectedEntreprise === 'all' || s.entrepriseId === selectedEntreprise;
 
     if (activeTab === 'critical') {
-      const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-      const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+      const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+      const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return matchesSearch && matchesRegion && matchesEntreprise && (essencePercent < 10 || gasoilPercent < 10);
     }
     if (activeTab === 'warning') {
-      const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-      const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+      const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+      const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return matchesSearch && matchesRegion && matchesEntreprise &&
         ((essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25));
     }
@@ -147,38 +158,41 @@ export default function StationsPage() {
   });
 
   const criticalCount = stations.filter(s => {
-    const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-    const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
     return essencePercent < 10 || gasoilPercent < 10;
   }).length;
 
   const warningCount = stations.filter(s => {
-    const essencePercent = Math.round((s.stockActuel.essence / s.capacite.essence) * 100);
-    const gasoilPercent = Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100);
+    const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
+    const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
     return (essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25);
   }).length;
 
-  const canCreateStation = currentUserRole === 'super_admin' ||
+  const canCreateStation =
+    currentUserRole === 'super_admin' ||
     (currentUserRole === 'responsable_entreprise' && !!currentUserProfile?.entreprise_id);
 
   const handleSaveStation = async () => {
-    const entrepriseId = currentUserRole === 'responsable_entreprise'
-      ? currentUserProfile?.entreprise_id
-      : stationForm.entreprise_id;
+    const entrepriseId =
+      currentUserRole === 'responsable_entreprise'
+        ? currentUserProfile?.entreprise_id
+        : stationForm.entreprise_id;
 
     if (!stationForm.nom?.trim() || !stationForm.code?.trim() || !stationForm.adresse?.trim() ||
         !stationForm.ville?.trim() || !stationForm.region || !entrepriseId) {
       toast({
         variant: 'destructive',
         title: 'Champs obligatoires manquants',
-        description: 'Veuillez remplir le nom, le code, l\'adresse, la ville et la région.',
+        description: `Veuillez remplir : ${missing.join(', ')}`,
       });
       return;
     }
 
     setSavingStation(true);
+
     try {
-      const { error } = await supabase.from('stations').insert({
+      const payload = {
         nom: stationForm.nom.trim(),
         code: stationForm.code.trim().toUpperCase(),
         adresse: stationForm.adresse.trim(),
@@ -189,17 +203,22 @@ export default function StationsPage() {
         capacite_essence: stationForm.capacite_essence || 0,
         capacite_gasoil: stationForm.capacite_gasoil || 0,
         statut: 'ouverte',
-        gestionnaire_nom: stationForm.gestionnaire_nom.trim() || null,
-        gestionnaire_telephone: stationForm.gestionnaire_telephone.trim() || null,
-        gestionnaire_email: stationForm.gestionnaire_email.trim() || null,
-      });
+        gestionnaire_nom: stationForm.gestionnaire_nom?.trim() || null,
+        gestionnaire_telephone: stationForm.gestionnaire_telephone?.trim() || null,
+        gestionnaire_email: stationForm.gestionnaire_email?.trim() || null,
+      };
+
+      console.log('Payload envoyé à Supabase :', payload);
+
+      const { error } = await supabase.from('stations').insert(payload);
 
       if (error) throw error;
 
       toast({
-        title: 'Station enregistrée',
-        description: `${stationForm.nom} a été créée avec succès.`,
+        title: 'Succès',
+        description: `${stationForm.nom} (${stationForm.code}) a été créée`,
       });
+
       setIsStationDialogOpen(false);
       setStationForm({
         nom: '',
@@ -211,16 +230,20 @@ export default function StationsPage() {
         entreprise_id: '',
         capacite_essence: 50000,
         capacite_gasoil: 50000,
+        capacite_gpl: 0,
+        capacite_lubrifiants: 0,
         gestionnaire_nom: '',
         gestionnaire_telephone: '',
         gestionnaire_email: '',
       });
-      fetchData();
-    } catch (err: unknown) {
+
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erreur création station :', err);
       toast({
         variant: 'destructive',
-        title: 'Erreur lors de l\'enregistrement',
-        description: err instanceof Error ? err.message : 'Impossible d\'enregistrer la station.',
+        title: 'Échec création',
+        description: err?.message || 'Vérifiez la console (F12)',
       });
     } finally {
       setSavingStation(false);
@@ -237,21 +260,17 @@ export default function StationsPage() {
   };
 
   return (
-    <DashboardLayout
-      title="Stations-service"
-      subtitle="Surveillance des stocks en temps réel"
-    >
+    <DashboardLayout title="Stations-service" subtitle="Surveillance des stocks en temps réel">
       <div className="flex justify-between items-center mb-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
           <TabsList className="bg-secondary/50">
-            <TabsTrigger value="all">
-              Toutes ({stations.length})
-            </TabsTrigger>
-            <TabsTrigger value="critical" className="text-stock-critical data-[state=active]:text-stock-critical">
+            <TabsTrigger value="all">Toutes ({stations.length})</TabsTrigger>
+            <TabsTrigger value="critical" className="text-red-600 data-[state=active]:text-red-600">
               <AlertTriangle className="h-4 w-4 mr-1" />
               Critiques ({criticalCount})
             </TabsTrigger>
-            <TabsTrigger value="warning" className="text-stock-warning data-[state=active]:text-stock-warning">
+            <TabsTrigger value="warning" className="text-amber-600 data-[state=active]:text-amber-600">
+              <AlertTriangle className="h-4 w-4 mr-1" />
               Alertes ({warningCount})
             </TabsTrigger>
           </TabsList>
@@ -264,14 +283,19 @@ export default function StationsPage() {
               Nouvelle station
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchData}
+            disabled={loading}
+            className="gap-2"
+          >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             <span className="hidden sm:inline">Actualiser</span>
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -303,32 +327,35 @@ export default function StationsPage() {
             <SelectContent>
               <SelectItem value="all">Toutes les entreprises</SelectItem>
               {entreprises.map(e => (
-                <SelectItem key={e.id} value={e.id}>{e.sigle}</SelectItem>
+                <SelectItem key={e.id} value={e.id}>{e.sigle || e.nom}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
       </div>
 
-      {/* Stations Grid */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-          <RefreshCw className="h-12 w-12 animate-spin mb-4 opacity-20" />
+          <Loader2 className="h-12 w-12 animate-spin mb-4" />
           <p>Chargement des stations...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredStations.map(station => (
-            <StationCard key={station.id} station={station} />
-          ))}
-        </div>
-      )}
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredStations.map(station => (
+              <Link key={station.id} to={`/stations/${station.id}`} className="block hover:scale-[1.02] transition-transform">
+                <StationCard station={station} />
+              </Link>
+            ))}
+          </div>
 
-      {!loading && filteredStations.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-lg font-medium">Aucune station trouvée</p>
-          <p className="text-sm">Modifiez vos critères de recherche</p>
-        </div>
+          {filteredStations.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <p className="text-lg font-medium">Aucune station trouvée</p>
+              <p className="text-sm">Modifiez vos critères ou créez-en une nouvelle</p>
+            </div>
+          )}
+        </>
       )}
 
       <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>

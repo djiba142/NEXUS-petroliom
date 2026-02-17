@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { 
   FileText, 
   Download, 
-  Calendar, 
   Filter,
   BarChart3,
   PieChart,
@@ -25,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { generateNationalStockPDF, generateOrdresLivraisonPDF, generateCustomReportPDF } from '@/lib/pdfExport';
+import { generateNationalStockPDF, generateCustomReportPDF } from '@/lib/pdfExport';
 
 const reportTypes = [
   {
@@ -97,7 +96,7 @@ export default function RapportsPage() {
             <CardContent>
               <CardTitle className="text-sm mb-1">{report.title}</CardTitle>
               <CardDescription className="text-xs mb-3">
-              {report.description}
+                {report.description}
               </CardDescription>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-muted-foreground">
@@ -108,11 +107,11 @@ export default function RapportsPage() {
                   variant="outline" 
                   className="h-7 text-xs gap-1"
                   disabled={generating === report.id}
-                  onClick={() => {
+                  onClick={async () => {
                     setGenerating(report.id);
-                    setTimeout(() => {
+                    try {
                       if (report.id === 'stock-national') {
-                        generateNationalStockPDF({
+                        await generateNationalStockPDF({
                           entreprises: [
                             { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
                             { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
@@ -128,11 +127,19 @@ export default function RapportsPage() {
                         generateCustomReportPDF({ type: report.id, title: report.title });
                       }
                       toast({
-                        title: "Rapport généré",
-                        description: `Le ${report.title} a été téléchargé.`,
+                        title: "Succès",
+                        description: `Le fichier ${report.title} a été téléchargé.`,
                       });
+                    } catch (err: any) {
+                      console.error("Erreur génération rapport :", err);
+                      toast({
+                        variant: "destructive",
+                        title: "Erreur",
+                        description: err.message || "Impossible de générer le fichier",
+                      });
+                    } finally {
                       setGenerating(null);
-                    }, 1000);
+                    }
                   }}
                 >
                   {generating === report.id ? (
@@ -197,66 +204,54 @@ export default function RapportsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>Région (optionnel)</Label>
-              <Select
-                onValueChange={() => { /* valeur gérée au clic PDF via l'élément sélectionné */ }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Toutes les régions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Toutes les régions</SelectItem>
-                  <SelectItem value="conakry">Conakry</SelectItem>
-                  <SelectItem value="kindia">Kindia</SelectItem>
-                  <SelectItem value="boke">Boké</SelectItem>
-                  <SelectItem value="mamou">Mamou</SelectItem>
-                  <SelectItem value="labe">Labé</SelectItem>
-                  <SelectItem value="faranah">Faranah</SelectItem>
-                  <SelectItem value="kankan">Kankan</SelectItem>
-                  <SelectItem value="nzerekore">Nzérékoré</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="flex gap-2 pt-2">
               <Button
                 className="flex-1 gap-2"
-                disabled={generatingCustom}
-                onClick={() => {
+                disabled={generatingCustom || !selectedType || !dateDebut || !dateFin}
+                onClick={async () => {
                   if (!selectedType || !dateDebut || !dateFin) {
                     toast({
                       variant: 'destructive',
                       title: 'Champs manquants',
-                      description: 'Veuillez choisir un type de rapport et une période (dates de début et de fin).',
+                      description: 'Type + dates obligatoires',
                     });
                     return;
                   }
+
                   setGeneratingCustom(true);
-                  setTimeout(() => {
-                    generateCustomReportPDF({
+                  try {
+                    await generateCustomReportPDF({
                       type: selectedType,
                       dateDebut,
                       dateFin,
                     });
                     toast({
-                      title: 'Rapport généré',
-                      description: 'Le rapport personnalisé a été téléchargé au format PDF.',
+                      title: 'Succès',
+                      description: 'Rapport téléchargé',
                     });
+                  } catch (err: any) {
+                    console.error("Erreur rapport personnalisé :", err);
+                    toast({
+                      variant: 'destructive',
+                      title: 'Erreur',
+                      description: err.message || 'Problème génération PDF',
+                    });
+                  } finally {
                     setGeneratingCustom(false);
-                  }, 500);
+                  }
                 }}
               >
                 <Download className="h-4 w-4" />
                 {generatingCustom ? 'Génération...' : 'PDF'}
               </Button>
+
               <Button
                 variant="outline"
                 className="flex-1 gap-2"
                 onClick={() => {
                   toast({
-                    title: 'Export Excel bientôt disponible',
-                    description: 'Pour l’instant seul le téléchargement PDF est activé.',
+                    title: 'Export Excel',
+                    description: 'Bientôt disponible',
                   });
                 }}
               >
@@ -305,56 +300,78 @@ export default function RapportsPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => {
-                        // Pour l’instant, on régénère un PDF de démonstration correspondant au type
-                        if (report.type === 'stock-national') {
-                          generateNationalStockPDF({
-                            entreprises: [
-                              { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
-                              { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
-                              { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
-                              { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
-                              { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
-                            ],
-                            totals: { essence: 310000, gasoil: 251000, stations: 45 },
-                            autonomieEssence: 12,
-                            autonomieGasoil: 15,
+                      onClick={async () => {
+                        try {
+                          if (report.type === 'stock-national') {
+                            await generateNationalStockPDF({
+                              entreprises: [
+                                { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
+                                { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
+                                { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
+                                { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
+                                { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
+                              ],
+                              totals: { essence: 310000, gasoil: 251000, stations: 45 },
+                              autonomieEssence: 12,
+                              autonomieGasoil: 15,
+                              isPrinting: true,
+                            });
+                            toast({
+                              title: 'Impression',
+                              description: 'Fenêtre ouverte pour impression',
+                            });
+                          } else {
+                            toast({
+                              title: 'Non supporté',
+                              description: 'Impression seulement pour Stock National',
+                            });
+                          }
+                        } catch (err: any) {
+                          console.error(err);
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur impression",
+                            description: err.message || "Impossible d'ouvrir",
                           });
-                        } else {
-                          generateCustomReportPDF({ type: report.type, title: report.name });
                         }
-                        toast({
-                          title: 'Impression',
-                          description: 'Le rapport a été préparé pour impression (ouvre un téléchargement PDF).',
-                        });
                       }}
                     >
                       <Printer className="h-4 w-4" />
                     </Button>
+
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => {
-                        if (report.type === 'stock-national') {
-                          generateNationalStockPDF({
-                            entreprises: [
-                              { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
-                              { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
-                              { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
-                              { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
-                              { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
-                            ],
-                            totals: { essence: 310000, gasoil: 251000, stations: 45 },
-                            autonomieEssence: 12,
-                            autonomieGasoil: 15,
+                      onClick={async () => {
+                        try {
+                          if (report.type === 'stock-national') {
+                            await generateNationalStockPDF({
+                              entreprises: [
+                                { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
+                                { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
+                                { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
+                                { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
+                                { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
+                              ],
+                              totals: { essence: 310000, gasoil: 251000, stations: 45 },
+                              autonomieEssence: 12,
+                              autonomieGasoil: 15,
+                            });
+                          } else {
+                            generateCustomReportPDF({ type: report.type, title: report.name });
+                          }
+                          toast({
+                            title: 'Téléchargement',
+                            description: `${report.name} téléchargé`,
                           });
-                        } else {
-                          generateCustomReportPDF({ type: report.type, title: report.name });
+                        } catch (err: any) {
+                          console.error(err);
+                          toast({
+                            variant: "destructive",
+                            title: "Erreur téléchargement",
+                            description: err.message || "Impossible de télécharger",
+                          });
                         }
-                        toast({
-                          title: 'Téléchargement',
-                          description: 'Le rapport a été téléchargé.',
-                        });
                       }}
                     >
                       <Download className="h-4 w-4" />

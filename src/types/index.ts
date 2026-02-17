@@ -6,9 +6,11 @@ export type UserRole = 'super_admin' | 'admin_etat' | 'inspecteur' | 'responsabl
 
 export type EntrepriseType = 'compagnie' | 'distributeur';
 
-export type StationType = 'urbaine' | 'routiere' | 'depot';
+export type StationType = 'urbaine' | 'routiere' | 'depot' | string;  // ← élargi pour Supabase
 
 export type AlertType = 'stock_critical' | 'stock_warning' | 'price_anomaly' | 'station_closed';
+
+export type StationStatus = 'ouverte' | 'fermee' | 'en_travaux' | 'attente_validation' | string;  // ← élargi
 
 export interface Entreprise {
   id: string;
@@ -35,9 +37,11 @@ export interface Station {
   ville: string;
   region: string;
   coordonnees?: { lat: number; lng: number };
-  type: StationType;
+  type: StationType;          // ← maintenant compatible avec n'importe quelle string
   entrepriseId: string;
   entrepriseNom: string;
+  entrepriseSigle: string;
+  entrepriseLogo?: string;
   capacite: {
     essence: number;
     gasoil: number;
@@ -56,7 +60,7 @@ export interface Station {
     telephone: string;
     email: string;
   };
-  statut: 'ouverte' | 'fermee' | 'en_travaux' | 'attente_validation';
+  statut: StationStatus;      // ← maintenant compatible avec n'importe quelle string
   derniereLivraison?: {
     date: string;
     quantite: number;
