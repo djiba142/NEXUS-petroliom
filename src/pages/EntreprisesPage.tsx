@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Loader2, Upload } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { EntrepriseCard } from '@/components/entreprises/EntrepriseCard';
-import { regions, getEnterpriseLogo } from '@/data/mockData';
+import { REGIONS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 // Import logos
 import logoTotal from '@/assets/logos/total-energies.png';
@@ -104,7 +104,7 @@ export default function EntreprisesPage() {
         region: e.region,
         statut: e.statut as 'actif' | 'suspendu' | 'ferme',
         nombreStations: counts[e.id] ?? 0,
-        logo: e.logo_url ?? undefined,
+        logo: e.logo_url || localLogoMapping[e.sigle] || undefined,
         contact: {
           nom: e.contact_nom || 'N/A',
           telephone: e.contact_telephone || '',
@@ -270,7 +270,7 @@ export default function EntreprisesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes les régions</SelectItem>
-            {regions.map(region => (
+            {REGIONS.map(region => (
               <SelectItem key={region} value={region}>{region}</SelectItem>
             ))}
           </SelectContent>
@@ -378,7 +378,7 @@ export default function EntreprisesPage() {
                 <Label>Nom *</Label>
                 <Input
                   value={formData.nom}
-                  onChange={e => setFormData({...formData, nom: e.target.value})}
+                  onChange={e => setFormData({ ...formData, nom: e.target.value })}
                   placeholder="Ex: TotalEnergies Guinée"
                 />
               </div>
@@ -388,7 +388,7 @@ export default function EntreprisesPage() {
                 <Label>Sigle *</Label>
                 <Input
                   value={formData.sigle}
-                  onChange={e => setFormData({...formData, sigle: e.target.value})}
+                  onChange={e => setFormData({ ...formData, sigle: e.target.value })}
                   placeholder="Ex: TOTAL"
                 />
               </div>
@@ -399,8 +399,8 @@ export default function EntreprisesPage() {
                   <Label>Type *</Label>
                   <Select
                     value={formData.type}
-                    onValueChange={(v: 'compagnie' | 'distributeur') => 
-                      setFormData({...formData, type: v})
+                    onValueChange={(v: 'compagnie' | 'distributeur') =>
+                      setFormData({ ...formData, type: v })
                     }
                   >
                     <SelectTrigger>
@@ -417,13 +417,13 @@ export default function EntreprisesPage() {
                   <Label>Région *</Label>
                   <Select
                     value={formData.region}
-                    onValueChange={v => setFormData({...formData, region: v})}
+                    onValueChange={v => setFormData({ ...formData, region: v })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
                     <SelectContent>
-                      {regions.map(r => (
+                      {REGIONS.map(r => (
                         <SelectItem key={r} value={r}>{r}</SelectItem>
                       ))}
                     </SelectContent>
@@ -436,7 +436,7 @@ export default function EntreprisesPage() {
                 <Label>N° agrément</Label>
                 <Input
                   value={formData.numeroAgrement}
-                  onChange={e => setFormData({...formData, numeroAgrement: e.target.value})}
+                  onChange={e => setFormData({ ...formData, numeroAgrement: e.target.value })}
                   placeholder="Ex: AGR-2026-001"
                 />
               </div>
@@ -447,7 +447,7 @@ export default function EntreprisesPage() {
                   <Label>Contact</Label>
                   <Input
                     value={formData.contactNom}
-                    onChange={e => setFormData({...formData, contactNom: e.target.value})}
+                    onChange={e => setFormData({ ...formData, contactNom: e.target.value })}
                     placeholder="Nom complet"
                   />
                 </div>
@@ -455,7 +455,7 @@ export default function EntreprisesPage() {
                   <Label>Téléphone</Label>
                   <Input
                     value={formData.contactTelephone}
-                    onChange={e => setFormData({...formData, contactTelephone: e.target.value})}
+                    onChange={e => setFormData({ ...formData, contactTelephone: e.target.value })}
                     placeholder="+224 6XX XX XX XX"
                   />
                 </div>
@@ -466,7 +466,7 @@ export default function EntreprisesPage() {
                 <Input
                   type="email"
                   value={formData.contactEmail}
-                  onChange={e => setFormData({...formData, contactEmail: e.target.value})}
+                  onChange={e => setFormData({ ...formData, contactEmail: e.target.value })}
                   placeholder="contact@entreprise.gn"
                 />
               </div>
@@ -478,8 +478,8 @@ export default function EntreprisesPage() {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Annuler
             </Button>
-            <Button 
-              onClick={handleSaveEntreprise} 
+            <Button
+              onClick={handleSaveEntreprise}
               disabled={saving}
             >
               {saving ? (

@@ -14,7 +14,8 @@ import {
   Ship,
   Truck,
   Info,
-  Shield
+  Shield,
+  FileCheck
 } from 'lucide-react';
 import logo from '@/assets/logo.png';
 import { cn } from '@/lib/utils';
@@ -29,7 +30,7 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { name: 'Accueil', href: '/', icon: LayoutDashboard }, // Accessible to all (redirects internally)
+  { name: 'Dashboard National', href: '/dashboard/admin', icon: LayoutDashboard, roles: ['super_admin', 'responsable_entreprise'] },
   { name: 'Carte Nationale', href: '/carte', icon: Map, roles: ['super_admin', 'responsable_entreprise'] },
   { name: 'Entreprises', href: '/entreprises', icon: Building2, roles: ['super_admin'] },
   { name: 'Stations', href: '/stations', icon: Fuel, roles: ['super_admin', 'responsable_entreprise'] },
@@ -39,12 +40,12 @@ const navigation: NavItem[] = [
 ];
 
 const dashboardNavigation: NavItem[] = [
-  { name: 'Dashboard National', href: '/dashboard/admin', icon: Shield, roles: ['super_admin'] },
-  { name: 'Mon Entreprise', href: '/dashboard/entreprise', icon: Building2, roles: ['responsable_entreprise'] },
+  { name: 'Mon Entreprise', href: '/mon-entreprise', icon: Building2, roles: ['responsable_entreprise'] },
 ];
 
 const adminNavigation: NavItem[] = [
   { name: 'Utilisateurs', href: '/utilisateurs', icon: Users, roles: ['super_admin'] },
+  { name: 'Audit', href: '/audit', icon: FileCheck, roles: ['super_admin'] },
   { name: 'Paramètres', href: '/parametres', icon: Settings, roles: ['super_admin'] },
 ];
 

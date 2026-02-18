@@ -171,12 +171,12 @@ export default function AuditPage() {
 
             <div>
               <label className="block text-sm font-medium mb-2">Type d'action</label>
-              <Select value={filters.actionType} onValueChange={(value) => handleFilterChange('actionType', value)}>
+              <Select value={filters.actionType || 'ALL'} onValueChange={(value) => handleFilterChange('actionType', value === 'ALL' ? '' : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Tous" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tous les types</SelectItem>
+                  <SelectItem value="ALL">Tous les types</SelectItem>
                   <SelectItem value="LOGIN">Connexion</SelectItem>
                   <SelectItem value="VIEW">Consultation</SelectItem>
                   <SelectItem value="CREATE">Création</SelectItem>
@@ -211,8 +211,8 @@ export default function AuditPage() {
             <Button onClick={loadLogs} disabled={loading}>
               {loading ? 'Chargement...' : 'Rechercher'}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setFilters({ userEmail: '', actionType: '', startDate: '', endDate: '' });
                 setError(null);

@@ -1,14 +1,15 @@
-import { useState } from 'react';
-import { 
-  FileText, 
-  Download, 
+import { useState, useEffect } from 'react';
+import {
+  FileText,
+  Download,
   Filter,
   BarChart3,
   PieChart,
   TrendingUp,
   FileSpreadsheet,
   Printer,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { generateNationalStockPDF, generateCustomReportPDF } from '@/lib/pdfExport';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 const reportTypes = [
   {
@@ -61,24 +64,208 @@ const reportTypes = [
   },
 ];
 
-const recentReports = [
-  { id: 1, name: 'Stock_National_2026-02-01.pdf', date: '01/02/2026', size: '2.4 MB', type: 'stock-national' },
-  { id: 2, name: 'Alertes_Janvier_2026.pdf', date: '31/01/2026', size: '1.8 MB', type: 'alertes' },
-  { id: 3, name: 'Consommation_S04_2026.xlsx', date: '27/01/2026', size: '3.2 MB', type: 'consommation' },
-  { id: 4, name: 'Importations_S04_2026.pdf', date: '27/01/2026', size: '1.1 MB', type: 'importations' },
-];
-
 export default function RapportsPage() {
   const { toast } = useToast();
+  const { profile } = useAuth();
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [generating, setGenerating] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState('');
   const [generatingCustom, setGeneratingCustom] = useState(false);
+  const [recentReports, setRecentReports] = useState<any[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
+
+  // Load recent reports from local storage or database
+  useEffect(() => {
+    loadRecentReports();
+  }, []);
+
+  const loadRecentReports = async () => {
+    try {
+      const stored = localStorage.getItem('generated_reports');
+      if (stored) {
+        const reports = JSON.parse(stored).sort((a: any, b: any) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ).slice(0, 5);
+        setRecentReports(reports);
+      }
+    } catch (error) {
+      console.error('Erreur chargement rapports:', error);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  const saveReportToHistory = (reportName: string, reportType: string, size: string) => {
+    try {
+      const stored = localStorage.getItem('generated_reports') || '[]';
+      const reports = JSON.parse(stored);
+      
+      const newReport = {
+        id: Date.now(),
+        name: reportName,
+        type: reportType,
+        date: new Date().toLocaleDateString('fr-FR'),
+        size: size,
+        createdAt: new Date().toISOString(),
+      };
+      
+      reports.push(newReport);
+      localStorage.setItem('generated_reports', JSON.stringify(reports.slice(-20))); // Keep last 20
+      
+      setRecentReports([newReport, ...reports.slice(0, 4)]);
+    } catch (error) {
+      console.error('Erreur sauvegarde rapport:', error);
+    }
+  };
+
+  // Helper functions to fetch data
+  const fetchStockData = async () => {
+    // 1. Fetch Entreprises
+    let orgQuery = supabase.from('entreprises').select('id, nom, sigle');
+
+    // Auth Filtering
+    if (profile?.entreprise_id) {
+      orgQuery = orgQuery.eq('id', profile.entreprise_id);
+    }
+
+    const { data: organisations, error: orgError } = await orgQuery;
+
+    if (orgError) throw orgError;
+
+    // 2. Fetch Stations
+    let stationsQuery = supabase
+      .from('stations')
+      .select('id, entreprise_id, stock_essence, stock_gasoil, statut');
+
+    // Auth Filtering for Stations
+    if (profile?.entreprise_id) {
+      stationsQuery = stationsQuery.eq('entreprise_id', profile.entreprise_id);
+    }
+
+    const { data: stations, error: stationsError } = await stationsQuery;
+
+    if (stationsError) throw stationsError;
+
+    // 3. Process Data
+    const entreprisesData = organisations.map(org => {
+      const orgStations = stations.filter(s => s.entreprise_id === org.id);
+      const stockEssence = orgStations.reduce((acc, s) => acc + (s.stock_essence || 0), 0);
+      const stockGasoil = orgStations.reduce((acc, s) => acc + (s.stock_gasoil || 0), 0);
+
+      return {
+        nom: org.nom,
+        sigle: org.sigle,
+        stockEssence,
+        stockGasoil,
+        stations: orgStations.length
+      };
+    });
+
+    const totalStockEssence = entreprisesData.reduce((acc, e) => acc + e.stockEssence, 0);
+    const totalStockGasoil = entreprisesData.reduce((acc, e) => acc + e.stockGasoil, 0);
+    const totalStations = stations.length;
+
+    const CONSOMMATION_JOURNALIERE = {
+      essence: 800000,
+      gasoil: 1200000,
+    };
+
+    return {
+      entreprises: entreprisesData,
+      totals: {
+        essence: totalStockEssence,
+        gasoil: totalStockGasoil,
+        stations: totalStations
+      },
+      autonomieEssence: Math.round(totalStockEssence / CONSOMMATION_JOURNALIERE.essence),
+      autonomieGasoil: Math.round(totalStockGasoil / CONSOMMATION_JOURNALIERE.gasoil),
+    };
+  };
+
+  const fetchAlertsData = async () => {
+    let query = supabase
+      .from('alertes')
+      .select('*, station:stations(nom)')
+      .order('created_at', { ascending: false });
+
+    if (profile?.entreprise_id) {
+      query = query.eq('entreprise_id', profile.entreprise_id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  };
+
+  const fetchImportData = async () => {
+    const { data, error } = await supabase
+      .from('importations')
+      .select('*')
+      .order('date_arrivee_prevue', { ascending: true });
+    if (error) throw error;
+    return data;
+  };
+
+  const handleGenerate = async (type: string, title: string, isPrinting = false) => {
+    try {
+      if (type === 'stock-national') {
+        const data = await fetchStockData();
+        await generateNationalStockPDF({ ...data, isPrinting });
+      } else if (type === 'alertes') {
+        const data = await fetchAlertsData();
+        generateCustomReportPDF({ type, title, data });
+      } else if (type === 'importations') {
+        const data = await fetchImportData();
+        generateCustomReportPDF({ type, title, data });
+      } else {
+        generateCustomReportPDF({ type, title, data: { message: "Données non disponibles" } });
+      }
+
+      // Save to history only if downloading
+      if (!isPrinting) {
+        saveReportToHistory(`${title}_${new Date().toISOString().slice(0, 10)}.pdf`, type, '~2 MB');
+        
+        toast({
+          title: "Succès",
+          description: `Le fichier ${title} a été téléchargé avec les données à jour.`,
+        });
+      } else {
+        toast({
+          title: "Impression",
+          description: "Fenêtre d'impression ouverte.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Erreur génération rapport :", err);
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: err.message || "Impossible de générer le fichier",
+      });
+    }
+  };
+
+  const deleteReport = (reportId: number) => {
+    try {
+      const stored = localStorage.getItem('generated_reports') || '[]';
+      const reports = JSON.parse(stored).filter((r: any) => r.id !== reportId);
+      localStorage.setItem('generated_reports', JSON.stringify(reports));
+      setRecentReports(reports);
+      
+      toast({
+        title: "Succès",
+        description: "Rapport supprimé de l'historique.",
+      });
+    } catch (error) {
+      console.error('Erreur suppression:', error);
+    }
+  };
+
 
   return (
-    <DashboardLayout 
-      title="Rapports" 
+    <DashboardLayout
+      title="Rapports"
       subtitle="Génération et historique des rapports"
     >
       {/* Quick Actions */}
@@ -102,44 +289,15 @@ export default function RapportsPage() {
                 <span className="text-[10px] text-muted-foreground">
                   Dernier: {report.lastGenerated}
                 </span>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
+                <Button
+                  size="sm"
+                  variant="outline"
                   className="h-7 text-xs gap-1"
                   disabled={generating === report.id}
                   onClick={async () => {
                     setGenerating(report.id);
-                    try {
-                      if (report.id === 'stock-national') {
-                        await generateNationalStockPDF({
-                          entreprises: [
-                            { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
-                            { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
-                            { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
-                            { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
-                            { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
-                          ],
-                          totals: { essence: 310000, gasoil: 251000, stations: 45 },
-                          autonomieEssence: 12,
-                          autonomieGasoil: 15,
-                        });
-                      } else {
-                        generateCustomReportPDF({ type: report.id, title: report.title });
-                      }
-                      toast({
-                        title: "Succès",
-                        description: `Le fichier ${report.title} a été téléchargé.`,
-                      });
-                    } catch (err: any) {
-                      console.error("Erreur génération rapport :", err);
-                      toast({
-                        variant: "destructive",
-                        title: "Erreur",
-                        description: err.message || "Impossible de générer le fichier",
-                      });
-                    } finally {
-                      setGenerating(null);
-                    }
+                    await handleGenerate(report.id, report.title);
+                    setGenerating(null);
                   }}
                 >
                   {generating === report.id ? (
@@ -175,7 +333,7 @@ export default function RapportsPage() {
                   <SelectValue placeholder="Sélectionner..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="stock">Stock National</SelectItem>
+                  <SelectItem value="stock-national">Stock National</SelectItem>
                   <SelectItem value="consommation">Consommation</SelectItem>
                   <SelectItem value="alertes">Alertes</SelectItem>
                   <SelectItem value="importations">Importations</SelectItem>
@@ -219,26 +377,9 @@ export default function RapportsPage() {
                   }
 
                   setGeneratingCustom(true);
-                  try {
-                    await generateCustomReportPDF({
-                      type: selectedType,
-                      dateDebut,
-                      dateFin,
-                    });
-                    toast({
-                      title: 'Succès',
-                      description: 'Rapport téléchargé',
-                    });
-                  } catch (err: any) {
-                    console.error("Erreur rapport personnalisé :", err);
-                    toast({
-                      variant: 'destructive',
-                      title: 'Erreur',
-                      description: err.message || 'Problème génération PDF',
-                    });
-                  } finally {
-                    setGeneratingCustom(false);
-                  }
+                  // Use same handler roughly
+                  await handleGenerate(selectedType, `Rapport Personnalisé ${selectedType}`);
+                  setGeneratingCustom(false);
                 }}
               >
                 <Download className="h-4 w-4" />
@@ -248,15 +389,63 @@ export default function RapportsPage() {
               <Button
                 variant="outline"
                 className="flex-1 gap-2"
-                onClick={() => {
-                  toast({
-                    title: 'Export Excel',
-                    description: 'Bientôt disponible',
-                  });
+                onClick={async () => {
+                  if (!selectedType) {
+                    toast({
+                      variant: 'destructive',
+                      title: 'Erreur',
+                      description: 'Veuillez sélectionner un type de rapport.',
+                    });
+                    return;
+                  }
+
+                  try {
+                    let data;
+                    if (selectedType === 'stock-national') {
+                      const stockData = await fetchStockData();
+                      // Flatten for Excel
+                      data = stockData.entreprises;
+                    } else if (selectedType === 'alertes') {
+                      data = await fetchAlertsData();
+                    } else if (selectedType === 'importations') {
+                      data = await fetchImportData();
+                    } else {
+                      data = [{ message: "Pas de données exportables pour ce type" }];
+                    }
+
+                    if (!data || data.length === 0) {
+                      toast({ title: "Info", description: "Aucune donnée à exporter." });
+                      return;
+                    }
+
+                    // Generate CSV
+                    const headers = Object.keys(data[0]).join(',');
+                    const rows = data.map((row: any) => Object.values(row).map(v =>
+                      typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : v
+                    ).join(',')).join('\n');
+                    const csvContent = headers + '\n' + rows;
+
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", `${selectedType}_${new Date().toISOString().slice(0, 10)}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    toast({
+                      title: 'Succès',
+                      description: 'Fichier Excel/CSV généré.',
+                    });
+                  } catch (e: any) {
+                    console.error(e);
+                    toast({ variant: 'destructive', title: 'Erreur Export', description: e.message });
+                  }
                 }}
               >
                 <FileSpreadsheet className="h-4 w-4" />
-                Excel
+                Excel / CSV
               </Button>
             </div>
           </CardContent>
@@ -280,105 +469,62 @@ export default function RapportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentReports.map((report) => (
-                <div 
-                  key={report.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{report.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {report.date} • {report.size}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={async () => {
-                        try {
-                          if (report.type === 'stock-national') {
-                            await generateNationalStockPDF({
-                              entreprises: [
-                                { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
-                                { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
-                                { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
-                                { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
-                                { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
-                              ],
-                              totals: { essence: 310000, gasoil: 251000, stations: 45 },
-                              autonomieEssence: 12,
-                              autonomieGasoil: 15,
-                              isPrinting: true,
-                            });
-                            toast({
-                              title: 'Impression',
-                              description: 'Fenêtre ouverte pour impression',
-                            });
-                          } else {
-                            toast({
-                              title: 'Non supporté',
-                              description: 'Impression seulement pour Stock National',
-                            });
-                          }
-                        } catch (err: any) {
-                          console.error(err);
-                          toast({
-                            variant: "destructive",
-                            title: "Erreur impression",
-                            description: err.message || "Impossible d'ouvrir",
-                          });
-                        }
-                      }}
-                    >
-                      <Printer className="h-4 w-4" />
-                    </Button>
-
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={async () => {
-                        try {
-                          if (report.type === 'stock-national') {
-                            await generateNationalStockPDF({
-                              entreprises: [
-                                { nom: 'TotalEnergies Guinée', sigle: 'TOTAL', stockEssence: 120000, stockGasoil: 95000, stations: 15 },
-                                { nom: 'Shell Guinée', sigle: 'SHELL', stockEssence: 85000, stockGasoil: 72000, stations: 12 },
-                                { nom: 'Kamsar Petroleum', sigle: 'KP', stockEssence: 45000, stockGasoil: 38000, stations: 8 },
-                                { nom: 'Trade Market Int.', sigle: 'TMI', stockEssence: 35000, stockGasoil: 28000, stations: 6 },
-                                { nom: 'Star Oil Guinée', sigle: 'STAR', stockEssence: 25000, stockGasoil: 18000, stations: 4 },
-                              ],
-                              totals: { essence: 310000, gasoil: 251000, stations: 45 },
-                              autonomieEssence: 12,
-                              autonomieGasoil: 15,
-                            });
-                          } else {
-                            generateCustomReportPDF({ type: report.type, title: report.name });
-                          }
-                          toast({
-                            title: 'Téléchargement',
-                            description: `${report.name} téléchargé`,
-                          });
-                        } catch (err: any) {
-                          console.error(err);
-                          toast({
-                            variant: "destructive",
-                            title: "Erreur téléchargement",
-                            description: err.message || "Impossible de télécharger",
-                          });
-                        }
-                      }}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
+              {loadingReports ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                  Chargement des rapports...
                 </div>
-              ))}
+              ) : recentReports.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Aucun rapport généré pour le moment.</p>
+                  <p className="text-xs">Les rapports générés apparaîtront ici.</p>
+                </div>
+              ) : (
+                recentReports.map((report) => (
+                  <div
+                    key={report.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{report.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {report.date} • {report.size}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleGenerate(report.type, report.name, true)}
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleGenerate(report.type, report.name, false)}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => deleteReport(report.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

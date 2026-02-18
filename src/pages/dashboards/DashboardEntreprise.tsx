@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { regions } from '@/data/mockData';
+import { REGIONS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -175,7 +175,7 @@ export default function DashboardEntreprise() {
       const { data: entrepriseData, error: entrepriseError } = await supabase
         .from('entreprises')
         .select('*')
-        .eq('id', profile?.entreprise_id)
+        .eq('id', profile?.entreprise_id || '')
         .maybeSingle();
 
       if (entrepriseError) throw entrepriseError;
@@ -185,17 +185,17 @@ export default function DashboardEntreprise() {
       const { data: stationsData, error: stationsError } = await supabase
         .from('stations')
         .select('*')
-        .eq('entreprise_id', profile?.entreprise_id)
+        .eq('entreprise_id', profile?.entreprise_id || '')
         .order('nom');
 
       if (stationsError) throw stationsError;
-      setStations(stationsData || []);
+      setStations((stationsData as any[]) || []);
 
       // Fetch User's Orders
       const { data: ordersData } = await supabase
         .from('ordres_livraison')
         .select('*, station:stations(nom)')
-        .eq('entreprise_id', profile?.entreprise_id)
+        .eq('entreprise_id', profile?.entreprise_id || '')
         .order('created_at', { ascending: false });
 
       setOrders(ordersData || []);
@@ -204,7 +204,7 @@ export default function DashboardEntreprise() {
       const { data: alertData } = await supabase
         .from('alertes')
         .select('*, station:stations(nom)')
-        .eq('entreprise_id', profile?.entreprise_id)
+        .eq('entreprise_id', profile?.entreprise_id || '')
         .eq('resolu', false);
 
       setAlerts((alertData || []).map(a => ({
@@ -346,7 +346,7 @@ export default function DashboardEntreprise() {
       const targetStationId = orderForm.station_id === 'enterprise_stock' ? null : orderForm.station_id;
 
       const { error } = await supabase.from('ordres_livraison').insert({
-        entreprise_id: profile?.entreprise_id,
+        entreprise_id: profile?.entreprise_id || '',
         station_id: targetStationId,
         carburant: orderForm.carburant,
         quantite_demandee: parseInt(orderForm.quantite),
@@ -924,7 +924,7 @@ export default function DashboardEntreprise() {
                     <SelectValue placeholder="Sélectionner" />
                   </SelectTrigger>
                   <SelectContent>
-                    {regions.map(r => (
+                    {REGIONS.map(r => (
                       <SelectItem key={r} value={r}>{r}</SelectItem>
                     ))}
                   </SelectContent>

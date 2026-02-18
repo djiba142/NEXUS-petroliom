@@ -22,6 +22,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Entreprise, Station, Alert } from '@/types';
 
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
+
 const getStockPercentage = (current: number, capacity: number) => {
   if (capacity <= 0) return 0;
   return Math.round((current / capacity) * 100);

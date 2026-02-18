@@ -42,6 +42,8 @@ interface AuthContextType {
   createUser: (params: CreateUserParams) => Promise<{ error: Error | null; userId?: string }>;
   updateUser: (userId: string, params: Partial<CreateUserParams>) => Promise<{ error: Error | null }>;
   deleteUser: (userId: string) => Promise<{ error: Error | null }>;
+  resetPasswordForEmail: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   getDashboardRoute: () => string;
 }
 
@@ -382,6 +384,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetPasswordForEmail = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth?type=recovery`,
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -396,6 +410,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       createUser,
       updateUser,
       deleteUser,
+      resetPasswordForEmail,
+      updatePassword,
       getDashboardRoute,
     }}>
       {children}

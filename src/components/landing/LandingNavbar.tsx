@@ -19,9 +19,10 @@ export const LandingNavbar = () => {
 
                     <div className="hidden md:flex items-center gap-8">
                         <a href="#" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Accueil</a>
+                        <Link to="/documentation" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Documentation</Link>
                         <a href="#features" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Fonctionnalités</a>
                         <a href="#services" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Services</a>
-                        <a href="#contact" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Contact</a>
+                        <Link to="/support" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Soutien</Link>
                         <Button className="bg-[#1e3a8a] hover:bg-[#1e3a8a]/90 text-white rounded-full px-8 shadow-lg shadow-blue-900/20" asChild>
                             <Link to={user ? "/panel" : "/auth"}>
                                 {user ? "Tableau de bord" : "Se connecter"}

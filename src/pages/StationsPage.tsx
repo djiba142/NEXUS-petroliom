@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, AlertTriangle, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StationCard } from '@/components/stations/StationCard';
@@ -23,31 +23,31 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { regions, getEnterpriseLogo } from '@/data/mockData';
+import { REGIONS, STATION_STATUS } from '@/lib/constants';
 import { Station } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, debounce } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
   const [stations, setStations] = useState<Station[]>([]);
   const [entreprises, setEntreprises] = useState<{ id: string; nom: string; sigle: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [regionsList, setRegionsList] = useState<string[]>([]);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [savingStation, setSavingStation] = useState(false);
-  
+
   // Pagination
   const ITEMS_PER_PAGE = 12;
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const [stationForm, setStationForm] = useState({
     nom: '',
     code: '',
@@ -65,6 +65,15 @@ export default function StationsPage() {
     gestionnaire_email: '',
   });
 
+  // Debounced search effect
+  useEffect(() => {
+    const debouncedUpdate = debounce((query: string) => {
+      setDebouncedSearchQuery(query);
+    }, 300);
+
+    debouncedUpdate(searchQuery);
+  }, [searchQuery]);
+
   useEffect(() => {
     fetchData();
   }, [currentUserRole, currentUserProfile?.entreprise_id]);
@@ -72,7 +81,7 @@ export default function StationsPage() {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedRegion, selectedEntreprise, activeTab]);
+  }, [debouncedSearchQuery, selectedRegion, selectedEntreprise, activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -130,8 +139,7 @@ export default function StationsPage() {
 
       setStations(mappedStations);
 
-      const uniqueRegions = Array.from(new Set(mappedStations.map(s => s.region).filter(Boolean)));
-      setRegionsList(uniqueRegions);
+      setStations(mappedStations);
     } catch (error) {
       console.error('Erreur chargement données:', error);
       toast({
@@ -147,8 +155,8 @@ export default function StationsPage() {
   const filteredStations = useMemo(() => {
     return stations.filter(s => {
       const matchesSearch =
-        s.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.code.toLowerCase().includes(searchQuery.toLowerCase());
+        s.nom.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        s.code.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
       const matchesRegion = selectedRegion === 'all' || s.region === selectedRegion;
       const matchesEntreprise = selectedEntreprise === 'all' || s.entrepriseId === selectedEntreprise;
 
@@ -166,7 +174,7 @@ export default function StationsPage() {
 
       return matchesSearch && matchesRegion && matchesEntreprise;
     });
-  }, [stations, searchQuery, selectedRegion, selectedEntreprise, activeTab]);
+  }, [stations, debouncedSearchQuery, selectedRegion, selectedEntreprise, activeTab]);
 
   // Paginated stations
   const paginatedStations = useMemo(() => {
@@ -230,7 +238,7 @@ export default function StationsPage() {
         ville: stationForm.ville.trim(),
         region: stationForm.region,
         type: stationForm.type,
-        entreprise_id: entrepriseId,
+        entreprise_id: entrepriseId!,
         capacite_essence: Number(stationForm.capacite_essence) || 0,
         capacite_gasoil: Number(stationForm.capacite_gasoil) || 0,
         capacite_gpl: 0,
@@ -291,7 +299,7 @@ export default function StationsPage() {
     setStationForm(prev => ({
       ...prev,
       entreprise_id: currentUserRole === 'responsable_entreprise' ? (currentUserProfile?.entreprise_id || '') : prev.entreprise_id,
-      region: prev.region || regions[0] || '',
+      region: prev.region || REGIONS[0] || '',
     }));
     setIsStationDialogOpen(true);
   };
@@ -350,7 +358,7 @@ export default function StationsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Toutes les régions</SelectItem>
-            {regionsList.map(region => (
+            {REGIONS.map(region => (
               <SelectItem key={region} value={region}>{region}</SelectItem>
             ))}
           </SelectContent>
@@ -395,7 +403,7 @@ export default function StationsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
               <div className="text-sm text-muted-foreground">
-                Page <span className="font-semibold">{currentPage}</span> sur <span className="font-semibold">{totalPages}</span> 
+                Page <span className="font-semibold">{currentPage}</span> sur <span className="font-semibold">{totalPages}</span>
                 ({filteredStations.length} station{filteredStations.length !== 1 ? 's' : ''})
               </div>
               <div className="flex items-center gap-2">
@@ -506,7 +514,7 @@ export default function StationsPage() {
                     <SelectValue placeholder="Choisir une région" />
                   </SelectTrigger>
                   <SelectContent>
-                    {regions.map(r => (
+                    {REGIONS.map(r => (
                       <SelectItem key={r} value={r}>{r}</SelectItem>
                     ))}
                   </SelectContent>
@@ -518,7 +526,7 @@ export default function StationsPage() {
               <Label>Type de station</Label>
               <Select
                 value={stationForm.type}
-                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => 
+                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') =>
                   setStationForm({ ...stationForm, type: v })
                 }
               >

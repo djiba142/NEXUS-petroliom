@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { z } from 'zod';
-import { Fuel, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldAlert } from 'lucide-react';
+import { Fuel, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldAlert, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,7 @@ const loginSchema = z.object({
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, user } = useAuth();
+  const { signIn, resetPasswordForEmail, updatePassword, user } = useAuth();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
@@ -24,13 +24,24 @@ export default function AuthPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Auth view state
+  const [view, setView] = useState<'login' | 'forgot' | 'reset'>('login');
+  const [isSuccess, setIsSuccess] = useState(false);
+
   useEffect(() => {
-    if (user) {
+    if (user && view !== 'reset') {
       navigate('/panel');
     }
-  }, [user, navigate]);
+
+    // Check if recovery link was clicked
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('type') === 'recovery') {
+      setView('reset');
+    }
+  }, [user, navigate, view]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,88 +105,237 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+      <div className="flex-1 flex items-center justify-center p-8 bg-background relative">
+        <div className="absolute top-8 left-8">
+          <Link to="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group">
+            <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+            Retour à l'accueil
+          </Link>
+        </div>
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <img src={logo} alt="SIHG" className="h-16 w-16 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-foreground">
-              Connexion
+              {view === 'login' && 'Connexion'}
+              {view === 'forgot' && 'Mot de passe oublié'}
+              {view === 'reset' && 'Réinitialisation'}
             </h1>
             <p className="text-muted-foreground mt-2">
-              Accédez à votre espace SIHG
+              {view === 'login' && 'Accédez à votre espace SIHG'}
+              {view === 'forgot' && "Entrez votre email pour recevoir un lien de récupération"}
+              {view === 'reset' && 'Choisissez votre nouveau mot de passe'}
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="votre@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email}</p>
-              )}
-            </div>
+          {!isSuccess ? (
+            <>
+              {view === 'login' ? (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="votre@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="text-sm text-destructive">{errors.email}</p>
+                    )}
+                  </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label htmlFor="password">Mot de passe</Label>
+                      <button
+                        type="button"
+                        onClick={() => setView('forgot')}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-sm text-destructive">{errors.password}</p>
+                    )}
+                  </div>
+
+                  <Button type="submit" className="w-full gap-2" disabled={loading}>
+                    {loading ? (
+                      'Chargement...'
+                    ) : (
+                      <>
+                        Se connecter
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </form>
+              ) : view === 'forgot' ? (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!email) return;
+                    setLoading(true);
+                    try {
+                      await resetPasswordForEmail(email);
+                      setIsSuccess(true);
+                    } catch (err: any) {
+                      toast({ variant: 'destructive', title: 'Erreur', description: err.message });
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="space-y-4"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password}</p>
-              )}
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="forgot-email"
+                        type="email"
+                        placeholder="votre@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
 
-            <Button type="submit" className="w-full gap-2" disabled={loading}>
-              {loading ? (
-                'Chargement...'
+                  <Button type="submit" className="w-full gap-2" disabled={loading}>
+                    {loading ? 'Envoi...' : 'Envoyer le lien'}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => setView('login')}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mx-auto"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Retour à la connexion
+                  </button>
+                </form>
               ) : (
-                <>
-                  Se connecter
-                  <ArrowRight className="h-4 w-4" />
-                </>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (password !== confirmPassword) {
+                      toast({ variant: 'destructive', title: 'Erreur', description: 'Les mots de passe ne correspondent pas' });
+                      return;
+                    }
+                    if (password.length < 6) {
+                      toast({ variant: 'destructive', title: 'Erreur', description: '6 caractères minimum' });
+                      return;
+                    }
+                    setLoading(true);
+                    try {
+                      await updatePassword(password);
+                      setIsSuccess(true);
+                    } catch (err: any) {
+                      toast({ variant: 'destructive', title: 'Erreur', description: err.message });
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">Nouveau mot de passe</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirmer le mot de passe</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? 'Mise à jour...' : 'Réinitialiser le mot de passe'}
+                  </Button>
+                </form>
               )}
-            </Button>
-          </form>
-
-          {/* Info about registration */}
-          <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-amber-800">
-                  Accès restreint
-                </p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Les inscriptions sont réservées aux administrateurs. Si vous avez besoin d'un compte, contactez la Direction Nationale des Hydrocarbures (DNH).
+            </>
+          ) : (
+            <div className="text-center space-y-6 py-4">
+              <div className="h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
+                <CheckCircle2 className="h-10 w-10" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold">
+                  {view === 'forgot' ? 'Email envoyé' : 'Mot de passe mis à jour'}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {view === 'forgot'
+                    ? "Veuillez vérifier votre boîte de réception pour continuer."
+                    : "Votre mot de passe a été modifié avec succès. Vous pouvez maintenant vous connecter."}
                 </p>
               </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setView('login');
+                  setIsSuccess(false);
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+              >
+                Retour à la connexion
+              </Button>
             </div>
-          </div>
+          )}
+
+          {view === 'login' && (
+            <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    Accès restreint
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Les inscriptions sont réservées aux administrateurs. Si vous avez besoin d'un compte, contactez les services officiels du Ministère de l'Énergie.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

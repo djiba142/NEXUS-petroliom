@@ -25,7 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Link } from 'react-router-dom';
 import { useRealtimeStations } from '@/hooks/useRealtimeStations';
 import { useRealtimeAlertes } from '@/hooks/useRealtimeAlertes';
-import { mockStations } from '@/data/mockData';
+
 
 interface Importation {
   id: string;
@@ -46,26 +46,24 @@ export default function DashboardSONAP() {
   const { stations: realtimeStations, loading: stationsLoading, refetch: refetchStations } = useRealtimeStations();
   const { alertes, criticalCount, warningCount } = useRealtimeAlertes({ showToast: true });
 
-  // Convert realtime stations to map format
-  const mapStations = realtimeStations.length > 0
-    ? realtimeStations.map(s => ({
-      id: s.id,
-      nom: s.nom,
-      code: s.code,
-      ville: s.ville,
-      region: s.region,
-      adresse: s.adresse,
-      type: s.type as any,
-      statut: s.statut as any,
-      entrepriseId: s.entreprise_id,
-      entrepriseNom: '',
-      coordonnees: s.latitude && s.longitude ? { lat: s.latitude, lng: s.longitude } : undefined,
-      stockActuel: { essence: s.stock_essence, gasoil: s.stock_gasoil, gpl: s.stock_gpl, lubrifiants: s.stock_lubrifiants },
-      capacite: { essence: s.capacite_essence, gasoil: s.capacite_gasoil, gpl: s.capacite_gpl, lubrifiants: s.capacite_lubrifiants },
-      gestionnaire: { nom: s.gestionnaire_nom || '', telephone: s.gestionnaire_telephone || '', email: '' },
-      nombrePompes: s.nombre_pompes,
-    }))
-    : mockStations;
+  // Convert realtime stations to map format (from Supabase)
+  const mapStations = realtimeStations.map(s => ({
+    id: s.id,
+    nom: s.nom,
+    code: s.code,
+    ville: s.ville,
+    region: s.region,
+    adresse: s.adresse,
+    type: s.type as any,
+    statut: s.statut as any,
+    entrepriseId: s.entreprise_id,
+    entrepriseNom: '',
+    coordonnees: s.latitude && s.longitude ? { lat: s.latitude, lng: s.longitude } : undefined,
+    stockActuel: { essence: s.stock_essence, gasoil: s.stock_gasoil, gpl: s.stock_gpl, lubrifiants: s.stock_lubrifiants },
+    capacite: { essence: s.capacite_essence, gasoil: s.capacite_gasoil, gpl: s.capacite_gpl, lubrifiants: s.capacite_lubrifiants },
+    gestionnaire: { nom: s.gestionnaire_nom || '', telephone: s.gestionnaire_telephone || '', email: '' },
+    nombrePompes: s.nombre_pompes,
+  }));
 
   useEffect(() => {
     fetchImportations();

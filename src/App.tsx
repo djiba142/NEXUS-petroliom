@@ -26,10 +26,24 @@ const StationDetailPage = lazy(() => import("./pages/StationDetailPage"));
 const AlertesPage = lazy(() => import("./pages/AlertesPage"));
 const UtilisateursPage = lazy(() => import("./pages/UtilisateursPage"));
 const RapportsPage = lazy(() => import("./pages/RapportsPage"));
+const AuditPage = lazy(() => import("./pages/AuditPage"));
+const EntrepriseInfoPage = lazy(() => import("./pages/EntrepriseInfoPage"));
 const ParametresPage = lazy(() => import("./pages/ParametresPage"));
 const ProfilPage = lazy(() => import("./pages/ProfilPage"));
 const CartePage = lazy(() => import("./pages/CartePage"));
 const AProposPage = lazy(() => import("./pages/AProposPage"));
+
+// Legal pages
+const MentionsLegalesPage = lazy(() => import("./pages/legal/MentionsLegalesPage"));
+const ConfidentialitePage = lazy(() => import("./pages/legal/ConfidentialitePage"));
+const CGUPage = lazy(() => import("./pages/legal/CGUPage"));
+const CookiesPage = lazy(() => import("./pages/legal/CookiesPage"));
+
+// Resources pages
+const DocumentationPage = lazy(() => import("./pages/resources/DocumentationPage"));
+const FAQPage = lazy(() => import("./pages/resources/FAQPage"));
+const GuidePage = lazy(() => import("./pages/resources/GuidePage"));
+const SoutienPage = lazy(() => import("./pages/resources/SoutienPage"));
 
 // Lazy load dashboards
 const DashboardEntreprise = lazy(() => import("./pages/dashboards/DashboardEntreprise"));
@@ -73,6 +87,17 @@ const App = () => (
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/acces-refuse" element={<AccessDeniedPage />} />
+
+            {/* Public Legal & Resources routes */}
+            <Route path="/mentions-legales" element={<Suspense fallback={<PageLoader />}><MentionsLegalesPage /></Suspense>} />
+            <Route path="/confidentialite" element={<Suspense fallback={<PageLoader />}><ConfidentialitePage /></Suspense>} />
+            <Route path="/cgu" element={<Suspense fallback={<PageLoader />}><CGUPage /></Suspense>} />
+            <Route path="/cookies" element={<Suspense fallback={<PageLoader />}><CookiesPage /></Suspense>} />
+
+            <Route path="/documentation" element={<Suspense fallback={<PageLoader />}><DocumentationPage /></Suspense>} />
+            <Route path="/faq" element={<Suspense fallback={<PageLoader />}><FAQPage /></Suspense>} />
+            <Route path="/guide" element={<Suspense fallback={<PageLoader />}><GuidePage /></Suspense>} />
+            <Route path="/support" element={<Suspense fallback={<PageLoader />}><SoutienPage /></Suspense>} />
 
             {/* DASHBOARDS STIRCTS - CHAQUE ROLE A LE SIEN */}
             <Route path="/panel" element={
@@ -162,6 +187,24 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Suspense fallback={<PageLoader />}><RapportsPage /></Suspense>} />
+            </Route>
+
+            {/* Audit : Super Admin seul */}
+            <Route path="/audit" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Suspense fallback={<PageLoader />}><AuditPage /></Suspense>} />
+            </Route>
+
+            {/* Informations Entreprise : Responsable Entreprise et Super Admin */}
+            <Route path="/mon-entreprise" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin', 'responsable_entreprise']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Suspense fallback={<PageLoader />}><EntrepriseInfoPage /></Suspense>} />
             </Route>
 
             {/* ADMINISTRATION SYSTEME - STRICTEMENT SUPER ADMIN */}
