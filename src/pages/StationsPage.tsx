@@ -29,6 +29,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
@@ -43,6 +48,43 @@ export default function StationsPage() {
   const [regionsList, setRegionsList] = useState<string[]>([]);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [savingStation, setSavingStation] = useState(false);
+
+  const localLogoMapping: Record<string, string> = {
+    'TOTAL': logoTotal,
+    'TotalEnergies': logoTotal,
+    'TO': logoTotal,
+    'SHELL': logoShell,
+    'VIVO': logoShell,
+    'SH': logoShell,
+    'TMI': logoTMI,
+    'TM': logoTMI,
+    'KP': logoKP,
+    'Kamsar Petroleum': logoKP,
+    'kamsar petroleum': logoKP,
+  };
+
+  const getLogoForEntreprise = (sigle: string, nom: string): string | undefined => {
+    // Essayer d'abord avec le sigle
+    if (localLogoMapping[sigle]) {
+      return localLogoMapping[sigle];
+    }
+    // Essayer avec le nom
+    if (localLogoMapping[nom]) {
+      return localLogoMapping[nom];
+    }
+    // Essayer les variations du nom
+    const nomVariations = [
+      nom.split('(')[0].trim(), // "Vivo Energy Guinée"
+      nom.split('-')[0].trim(), // Pour les noms avec tiret
+    ];
+    for (const variation of nomVariations) {
+      if (localLogoMapping[variation]) {
+        return localLogoMapping[variation];
+      }
+    }
+    return undefined;
+  };
+
   const [stationForm, setStationForm] = useState({
     nom: '',
     code: '',
@@ -97,6 +139,8 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
+        entrepriseSigle: s.entreprises?.sigle || '',
+        entrepriseLogo: s.entreprises?.logo_url ?? getLogoForEntreprise(s.entreprises?.sigle || '', s.entreprises?.nom || ''),
         capacite: {
           essence: s.capacite_essence || 0,
           gasoil: s.capacite_gasoil || 0,
