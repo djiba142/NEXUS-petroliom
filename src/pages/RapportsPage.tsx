@@ -84,7 +84,7 @@ export default function RapportsPage() {
     try {
       const stored = localStorage.getItem('generated_reports');
       if (stored) {
-        const reports = JSON.parse(stored).sort((a: any, b: any) => 
+        const reports = JSON.parse(stored).sort((a: any, b: any) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         ).slice(0, 5);
         setRecentReports(reports);
@@ -100,7 +100,7 @@ export default function RapportsPage() {
     try {
       const stored = localStorage.getItem('generated_reports') || '[]';
       const reports = JSON.parse(stored);
-      
+
       const newReport = {
         id: Date.now(),
         name: reportName,
@@ -109,10 +109,10 @@ export default function RapportsPage() {
         size: size,
         createdAt: new Date().toISOString(),
       };
-      
+
       reports.push(newReport);
       localStorage.setItem('generated_reports', JSON.stringify(reports.slice(-20))); // Keep last 20
-      
+
       setRecentReports([newReport, ...reports.slice(0, 4)]);
     } catch (error) {
       console.error('Erreur sauvegarde rapport:', error);
@@ -225,7 +225,7 @@ export default function RapportsPage() {
       // Save to history only if downloading
       if (!isPrinting) {
         saveReportToHistory(`${title}_${new Date().toISOString().slice(0, 10)}.pdf`, type, '~2 MB');
-        
+
         toast({
           title: "Succès",
           description: `Le fichier ${title} a été téléchargé avec les données à jour.`,
@@ -252,7 +252,7 @@ export default function RapportsPage() {
       const reports = JSON.parse(stored).filter((r: any) => r.id !== reportId);
       localStorage.setItem('generated_reports', JSON.stringify(reports));
       setRecentReports(reports);
-      
+
       toast({
         title: "Succès",
         description: "Rapport supprimé de l'historique.",
@@ -261,7 +261,6 @@ export default function RapportsPage() {
       console.error('Erreur suppression:', error);
     }
   };
-
 
   return (
     <DashboardLayout

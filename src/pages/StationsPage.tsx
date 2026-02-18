@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, AlertTriangle, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StationCard } from '@/components/stations/StationCard';
@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -23,12 +22,47 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { REGIONS, STATION_STATUS } from '@/lib/constants';
+import { REGIONS } from '@/lib/constants';
 import { Station } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn, debounce } from '@/lib/utils';
-import { Link } from 'react-router-dom';
+
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
+
+const localLogoMapping: Record<string, string> = {
+  TOTAL: logoTotal,
+  TotalEnergies: logoTotal,
+  TO: logoTotal,
+  SHELL: logoShell,
+  VIVO: logoShell,
+  SH: logoShell,
+  TMI: logoTMI,
+  TM: logoTMI,
+  KP: logoKP,
+  'Kamsar Petroleum': logoKP,
+  'KAMSAR PETROLEUM': logoKP,
+};
+
+const getLogoForEntreprise = (sigle: string, nom: string): string | null => {
+  if (sigle && localLogoMapping[sigle]) return localLogoMapping[sigle];
+  if (nom && localLogoMapping[nom]) return localLogoMapping[nom];
+
+  if (nom) {
+    const nomVariations = [
+      nom.split('(')[0].trim(),
+      nom.split('-')[0].trim(),
+    ];
+    for (const variation of nomVariations) {
+      if (localLogoMapping[variation]) return localLogoMapping[variation];
+    }
+  }
+  return null;
+};
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
@@ -116,6 +150,8 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
+        entrepriseSigle: s.entreprises?.sigle || '',
+        entrepriseLogo: s.entreprises?.logo_url ?? getLogoForEntreprise(s.entreprises?.sigle || '', s.entreprises?.nom || ''),
         capacite: {
           essence: s.capacite_essence || 0,
           gasoil: s.capacite_gasoil || 0,
@@ -136,8 +172,6 @@ export default function StationsPage() {
         },
         statut: s.statut as any,
       }));
-
-      setStations(mappedStations);
 
       setStations(mappedStations);
     } catch (error) {
@@ -253,8 +287,6 @@ export default function StationsPage() {
         gestionnaire_email: stationForm.gestionnaire_email?.trim() || null,
       };
 
-      console.log('Payload envoyé à Supabase :', payload);
-
       const { error } = await supabase.from('stations').insert(payload);
 
       if (error) throw error;
@@ -288,7 +320,7 @@ export default function StationsPage() {
       toast({
         variant: 'destructive',
         title: 'Échec création',
-        description: err?.message || 'Vérifiez la console (F12)',
+        description: err?.message || 'Une erreur est survenue lors de la création.',
       });
     } finally {
       setSavingStation(false);
@@ -604,6 +636,18 @@ export default function StationsPage() {
                 value={stationForm.gestionnaire_nom}
                 onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
               />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  placeholder="Téléphone"
+                  value={stationForm.gestionnaire_telephone}
+                  onChange={(e) => setStationForm({ ...stationForm, gestionnaire_telephone: e.target.value })}
+                />
+                <Input
+                  placeholder="Email"
+                  value={stationForm.gestionnaire_email}
+                  onChange={(e) => setStationForm({ ...stationForm, gestionnaire_email: e.target.value })}
+                />
+              </div>
             </div>
           </div>
 

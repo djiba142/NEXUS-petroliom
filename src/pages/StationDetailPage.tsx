@@ -14,17 +14,24 @@ import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
-// ─── Local logo fallback ───
+// Import logos
 import logoTotal from '@/assets/logos/total-energies.png';
 import logoShell from '@/assets/logos/shell.jpg';
 import logoTMI from '@/assets/logos/tmi.jpg';
 import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
 const localLogoMapping: Record<string, string> = {
-  TOTAL: logoTotal, TotalEnergies: logoTotal, TO: logoTotal,
-  SHELL: logoShell, VIVO: logoShell, SH: logoShell,
-  TMI: logoTMI, TM: logoTMI,
+  TOTAL: logoTotal,
+  TotalEnergies: logoTotal,
+  TO: logoTotal,
+  SHELL: logoShell,
+  VIVO: logoShell,
+  SH: logoShell,
+  TMI: logoTMI,
+  TM: logoTMI,
   KP: logoKP,
+  'Kamsar Petroleum': logoKP,
+  'KAMSAR PETROLEUM': logoKP,
 };
 
 // ─── Types ───
@@ -108,6 +115,22 @@ function formatNumber(num: number): string {
   return new Intl.NumberFormat('fr-GN').format(num);
 }
 
+const getLogoForEntreprise = (sigle: string, nom: string): string | null => {
+  if (sigle && localLogoMapping[sigle]) return localLogoMapping[sigle];
+  if (nom && localLogoMapping[nom]) return localLogoMapping[nom];
+
+  if (nom) {
+    const nomVariations = [
+      nom.split('(')[0].trim(),
+      nom.split('-')[0].trim(),
+    ];
+    for (const variation of nomVariations) {
+      if (localLogoMapping[variation]) return localLogoMapping[variation];
+    }
+  }
+  return null;
+};
+
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [station, setStation] = useState<StationDetail | null>(null);
@@ -153,7 +176,7 @@ export default function StationDetailPage() {
 
       setAlerts(alertData || []);
 
-      // Fetch recent deliveries (mouvements_stock table if exists, else skip)
+      // Fetch recent deliveries
       const { data: livData } = await supabase
         .from('mouvements_stock')
         .select('id, created_at, type_carburant, quantite, fournisseur, numero_camion')
@@ -206,9 +229,7 @@ export default function StationDetailPage() {
   const gplPercent = calculatePercentage(station.stock_gpl, station.capacite_gpl);
   const lubrifiantsPercent = calculatePercentage(station.stock_lubrifiants, station.capacite_lubrifiants);
 
-  const entrepriseLogo = station.entreprise?.logo_url
-    || (station.entreprise?.sigle ? localLogoMapping[station.entreprise.sigle] : null)
-    || null;
+  const entrepriseLogo = station.entreprise?.logo_url || getLogoForEntreprise(station.entreprise?.sigle || '', station.entreprise?.nom || '');
 
   return (
     <DashboardLayout title={station.nom} subtitle={`${station.code} - ${station.ville}`}>

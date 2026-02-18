@@ -3,10 +3,13 @@ import 'jspdf-autotable';
 import QRCode from 'qrcode';
 import nexusLogo from '@/assets/logo.png';
 
+// Type pour TypeScript
 declare module 'jspdf' {
   interface jsPDF {
-    autoTable: (options: unknown) => jsPDF;
-    lastAutoTable: { finalY: number };
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable?: {
+      finalY?: number;
+    };
   }
 }
 
@@ -27,24 +30,9 @@ const addHeaderWithLogoAndQR = async (doc: jsPDF, title: string) => {
 
   // 1. Add Logo (Left)
   try {
-    // Assuming nexusLogo is a URL or base64. If it's a URL, we might need to fetch it.
-    // However, if imported via Vite/Webpack, it might be a URL.
-    // If it's a URL, addImage often works if it's same-origin or base64.
-    // For local dev, let's try adding it directly.
-
-    // Create an image element to ensure we have data
-    const img = new Image();
-    img.src = nexusLogo;
-
-    // We need to wait for image to load if we don't have base64
-    // But addImage can take a URL in some versions. 
-    // Safer way: fetch and convert to base64 if it's a url.
-
-    // For simplicity in this environment, we try adding the imported string.
     doc.addImage(nexusLogo, 'PNG', 10, 2, 20, 20);
   } catch (err) {
     console.warn("Logo Error", err);
-    // Fallback text if logo fails
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.text("NEXUS", 14, 15);
@@ -85,7 +73,6 @@ const addHeaderWithLogoAndQR = async (doc: jsPDF, title: string) => {
   doc.line(20, 48, pageWidth - 20, 48);
 
   // 6. Add Footer (Page Numbers)
-  // 6. Add Footer (Page Numbers)
   const pageCount = doc.getNumberOfPages();
   doc.setFontSize(8);
   for (let i = 1; i <= pageCount; i++) {
@@ -103,24 +90,20 @@ export async function generateNationalStockPDF(stats: {
   isPrinting?: boolean;
 }): Promise<void> {
   const doc = new jsPDF();
-
   await addHeaderWithLogoAndQR(doc, 'Rapport Stock National');
-
-  // Content
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
 
   // Summary Box
   doc.setFillColor(245, 247, 250);
   doc.roundedRect(20, 55, 170, 25, 3, 3, 'F');
 
   doc.setFontSize(11);
+  doc.setTextColor(44, 62, 80);
   doc.text('Résumé Global', 25, 62);
   doc.setFontSize(10);
   doc.text(`Autonomie Essence: ${stats.autonomieEssence} jours`, 25, 70);
   doc.text(`Autonomie Gasoil: ${stats.autonomieGasoil} jours`, 100, 70);
 
-  // Tableau with styling
+  // Table
   doc.autoTable({
     startY: 90,
     head: [['Entreprise', 'Essence (L)', 'Gasoil (L)', 'Stations']],
@@ -136,16 +119,14 @@ export async function generateNationalStockPDF(stats: {
     styles: { fontSize: 10, cellPadding: 3 },
   });
 
-  // Footer for totals
-  // Footer for totals (Handle potential null lastAutoTable)
+  // Totals
   const finalY = (doc.lastAutoTable?.finalY || 100) + 10;
   doc.setFontSize(11);
   doc.text('Totaux Nationaux:', 20, finalY);
   doc.text(`Essence: ${stats.totals.essence.toLocaleString('fr-FR')} L`, 60, finalY);
   doc.text(`Gasoil: ${stats.totals.gasoil.toLocaleString('fr-FR')} L`, 130, finalY);
 
-
-  // Download / Print Logic
+  // Return logic
   if (stats.isPrinting) {
     doc.autoPrint();
     window.open(doc.output('bloburl'), '_blank');
@@ -159,9 +140,6 @@ export async function generateCustomReportPDF(options: {
   title?: string;
   dateDebut?: string;
   dateFin?: string;
-
-
-
   data?: any;
   isPrinting?: boolean;
 }): Promise<void> {
@@ -185,23 +163,20 @@ export async function generateCustomReportPDF(options: {
   if (options.data && Array.isArray(options.data) && options.data.length > 0) {
     const keys = Object.keys(options.data[0]).filter(k => k !== 'id' && !k.endsWith('_id') && k !== 'created_at');
 
-    // Format data for display
     const data = options.data.map((item: any) => keys.map(key => {
       const val = item[key];
       if (typeof val === 'object' && val !== null) {
-        if (val.nom) return val.nom; // expand simple relations
+        if (val.nom) return val.nom;
         return JSON.stringify(val);
       }
       if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
       if (typeof val === 'number') return val.toLocaleString('fr-FR');
-      // Format dates if string looks like date
       if (typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}/)) {
         return new Date(val).toLocaleDateString('fr-FR');
       }
       return val;
     }));
 
-    // Generate nicer columns labels
     const headers = keys.map(k => k.replace(/_/g, ' ').toUpperCase());
 
     doc.autoTable({
@@ -217,7 +192,6 @@ export async function generateCustomReportPDF(options: {
     doc.text("Aucune donnée disponible pour ce rapport.", 20, currentY + 10);
   }
 
-  // Download / Print Logic
   if (options.isPrinting) {
     doc.autoPrint();
     const blobUrl = doc.output('bloburl');

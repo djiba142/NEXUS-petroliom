@@ -316,6 +316,7 @@ export default function AlertesPage() {
     };
   };
 
+
   return (
     <DashboardLayout
       title="Centre d'Alertes"
