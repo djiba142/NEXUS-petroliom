@@ -23,11 +23,12 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { regions } from '@/data/mockData';
+import { regions, getEnterpriseLogo } from '@/data/mockData';
 import { Station } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Link } from 'react-router-dom';
 
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
@@ -106,8 +107,6 @@ export default function StationsPage() {
         type: s.type as any,
         entrepriseId: s.entreprise_id,
         entrepriseNom: s.entreprises?.nom || 'Inconnu',
-        entrepriseSigle: s.entreprises?.sigle || '',
-        entrepriseLogo: s.entreprises?.logo_url || localLogoMapping[s.entreprises?.sigle || ''] || undefined,
         capacite: {
           essence: s.capacite_essence || 0,
           gasoil: s.capacite_gasoil || 0,
@@ -232,8 +231,14 @@ export default function StationsPage() {
         region: stationForm.region,
         type: stationForm.type,
         entreprise_id: entrepriseId,
-        capacite_essence: stationForm.capacite_essence || 0,
-        capacite_gasoil: stationForm.capacite_gasoil || 0,
+        capacite_essence: Number(stationForm.capacite_essence) || 0,
+        capacite_gasoil: Number(stationForm.capacite_gasoil) || 0,
+        capacite_gpl: 0,
+        capacite_lubrifiants: 0,
+        stock_essence: 0,
+        stock_gasoil: 0,
+        stock_gpl: 0,
+        stock_lubrifiants: 0,
         statut: 'ouverte',
         gestionnaire_nom: stationForm.gestionnaire_nom?.trim() || null,
         gestionnaire_telephone: stationForm.gestionnaire_telephone?.trim() || null,
@@ -446,39 +451,43 @@ export default function StationsPage() {
       )}
 
       <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[580px] max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader>
-            <DialogTitle>Nouvelle station</DialogTitle>
+            <DialogTitle>Nouvelle station-service</DialogTitle>
             <DialogDescription>
-              Renseignez les informations de la station-service.
+              Renseignez les informations principales de la station.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+
+          <div className="space-y-5 py-2">
             <div className="space-y-2">
               <Label>Nom de la station *</Label>
               <Input
                 value={stationForm.nom}
                 onChange={(e) => setStationForm({ ...stationForm, nom: e.target.value })}
-                placeholder="Ex: Station Centre-ville"
+                placeholder="Ex: Station Kipé"
               />
             </div>
+
             <div className="space-y-2">
               <Label>Code unique *</Label>
               <Input
                 value={stationForm.code}
                 onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })}
-                placeholder="Ex: TE-CON-001"
+                placeholder="Ex: CON-001"
               />
             </div>
+
             <div className="space-y-2">
-              <Label>Adresse *</Label>
+              <Label>Adresse complète *</Label>
               <Input
                 value={stationForm.adresse}
                 onChange={(e) => setStationForm({ ...stationForm, adresse: e.target.value })}
-                placeholder="Ex: Avenue de la République"
+                placeholder="Ex: Avenue de la République, Kipé"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Ville *</Label>
                 <Input
@@ -494,7 +503,7 @@ export default function StationsPage() {
                   onValueChange={(v) => setStationForm({ ...stationForm, region: v })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
+                    <SelectValue placeholder="Choisir une région" />
                   </SelectTrigger>
                   <SelectContent>
                     {regions.map(r => (
@@ -504,22 +513,26 @@ export default function StationsPage() {
                 </Select>
               </div>
             </div>
+
             <div className="space-y-2">
-              <Label>Type</Label>
+              <Label>Type de station</Label>
               <Select
                 value={stationForm.type}
-                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => setStationForm({ ...stationForm, type: v })}
+                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => 
+                  setStationForm({ ...stationForm, type: v })
+                }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="urbaine">Urbaine</SelectItem>
                   <SelectItem value="routiere">Routière</SelectItem>
-                  <SelectItem value="depot">Dépôt</SelectItem>
+                  <SelectItem value="depot">Dépôt / Entrepôt</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
             {currentUserRole === 'super_admin' && (
               <div className="space-y-2">
                 <Label>Entreprise *</Label>
@@ -528,55 +541,76 @@ export default function StationsPage() {
                   onValueChange={(v) => setStationForm({ ...stationForm, entreprise_id: v })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner" />
+                    <SelectValue placeholder="Choisir l'entreprise" />
                   </SelectTrigger>
                   <SelectContent>
                     {entreprises.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.nom}</SelectItem>
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.sigle || e.nom}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Capacité essence (L)</Label>
+                <Label>Capacité essence (litres)</Label>
                 <Input
                   type="number"
+                  min="0"
                   value={stationForm.capacite_essence || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_essence: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStationForm({
+                      ...stationForm,
+                      capacite_essence: val === '' ? 0 : Number(val),
+                    });
+                  }}
+                  placeholder="Ex: 50000"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Capacité gasoil (L)</Label>
+                <Label>Capacité gasoil (litres)</Label>
                 <Input
                   type="number"
+                  min="0"
                   value={stationForm.capacite_gasoil || ''}
-                  onChange={(e) => setStationForm({ ...stationForm, capacite_gasoil: parseInt(e.target.value) || 0 })}
-                  placeholder="50000"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStationForm({
+                      ...stationForm,
+                      capacite_gasoil: val === '' ? 0 : Number(val),
+                    });
+                  }}
+                  placeholder="Ex: 50000"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Gestionnaire (nom)</Label>
+
+            <div className="space-y-4 border-t pt-4">
+              <Label>Gestionnaire de la station (optionnel)</Label>
               <Input
+                placeholder="Nom complet du gestionnaire"
                 value={stationForm.gestionnaire_nom}
                 onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
-                placeholder="Nom du gestionnaire"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>Annuler</Button>
+
+          <DialogFooter className="sticky bottom-0 bg-background pt-4 -mx-6 -mb-6 px-6 pb-6 border-t">
+            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>
+              Annuler
+            </Button>
             <Button onClick={handleSaveStation} disabled={savingStation}>
               {savingStation ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Enregistrement...
                 </>
               ) : (
-                'Enregistrer'
+                'Créer la station'
               )}
             </Button>
           </DialogFooter>

@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StockIndicator, StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockAlerts, prixOfficiels } from '@/data/mockData';
-import { supabase } from '@/integrations/supabase/client';
-import { Station } from '@/types';
+import { mockStations, mockAlerts, prixOfficiels } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 
 const typeLabels = {
@@ -47,75 +45,7 @@ const mockDeliveries = [
 
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [station, setStation] = useState<Station | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) {
-      setError("Aucun ID dans l'URL");
-      setLoading(false);
-      return;
-    }
-
-    const loadStation = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('stations')
-          .select(`
-            *,
-            entreprises:entreprise_id(nom, sigle)
-          `)
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
-        if (!data) throw new Error('Station non trouvée dans la base');
-
-        const mapped: Station = {
-          id: data.id,
-          nom: data.nom,
-          code: data.code,
-          adresse: data.adresse,
-          ville: data.ville,
-          region: data.region,
-          type: data.type || 'urbaine',  // valeur par défaut si null
-          entrepriseId: data.entreprise_id,
-          entrepriseNom: data.entreprises?.nom || 'Inconnu',
-          capacite: {
-            essence: data.capacite_essence || 0,
-            gasoil: data.capacite_gasoil || 0,
-            gpl: data.capacite_gpl || 0,
-            lubrifiants: data.capacite_lubrifiants || 0,
-          },
-          stockActuel: {
-            essence: data.stock_essence || 0,
-            gasoil: data.stock_gasoil || 0,
-            gpl: data.stock_gpl || 0,
-            lubrifiants: data.stock_lubrifiants || 0,
-          },
-          nombrePompes: data.nombre_pompes || 0,
-          gestionnaire: {
-            nom: data.gestionnaire_nom || 'Non assigné',
-            telephone: data.gestionnaire_telephone || '',
-            email: data.gestionnaire_email || '',
-          },
-         statut: data.statut || 'ouverte',  // valeur par défaut si null
-        };
-
-        setStation(mapped);
-      } catch (err: any) {
-        console.error('Erreur chargement station:', err);
-        setError(err.message || 'Impossible de charger la station');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadStation();
-  }, [id]);
-
+  const station = mockStations.find(s => s.id === id);
   const stationAlerts = mockAlerts.filter(a => a.stationId === id && !a.resolu);
 
   if (loading) {
@@ -311,11 +241,7 @@ export default function StationDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Stock Evolution Chart */}
-            <StockEvolutionChart 
-              stationId={id} 
-              title="Évolution des stocks de la station" 
-            />
+            <StockEvolutionChart stationId={id} title="Évolution des stocks de la station" />
 
             <Card>
               <CardHeader className="pb-4">
@@ -407,20 +333,24 @@ export default function StationDetailPage() {
                     </div>
                   </div>
                   <div className="space-y-2 pt-2">
-                    <a 
-                      href={`tel:${station.gestionnaire.telephone}`}
-                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                    >
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      {station.gestionnaire.telephone}
-                    </a>
-                    <a 
-                      href={`mailto:${station.gestionnaire.email}`}
-                      className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                    >
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      {station.gestionnaire.email}
-                    </a>
+                    {station.gestionnaire.telephone && (
+                      <a 
+                        href={`tel:${station.gestionnaire.telephone}`}
+                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                      >
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        {station.gestionnaire.telephone}
+                      </a>
+                    )}
+                    {station.gestionnaire.email && (
+                      <a 
+                        href={`mailto:${station.gestionnaire.email}`}
+                        className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                      >
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        {station.gestionnaire.email}
+                      </a>
+                    )}
                   </div>
                 </div>
               </CardContent>

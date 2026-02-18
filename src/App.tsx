@@ -15,6 +15,7 @@ import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import AccessDeniedPage from "./pages/AccessDeniedPage";
 import NotFound from "./pages/NotFound";
+import OrdersPage from "./pages/admin/OrdersPage";
 
 // Lazy load non-critical pages (protected pages)
 const Index = lazy(() => import("./pages/Index"));
@@ -170,6 +171,14 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Suspense fallback={<PageLoader />}><UtilisateursPage /></Suspense>} />
+            </Route>
+
+            <Route path="/admin/commandes" element={
+              <ProtectedRoute>
+                <RequireRole allowedRoles={['super_admin']} />
+              </ProtectedRoute>
+            }>
+              <Route index element={<OrdersPage />} />
             </Route>
 
             <Route path="/parametres" element={

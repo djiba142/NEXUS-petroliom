@@ -50,29 +50,14 @@ const StationCardComponent = ({ station }: StationCardProps) => {
         !hasCritical && !hasWarning && "hover:border-primary/30"
       )}
     >
-      <div className="flex items-start gap-3 mb-4">
-        {/* Entreprise Logo */}
-        <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-border overflow-hidden shadow-sm">
-          {station.entrepriseLogo ? (
-            <img
-              src={station.entrepriseLogo}
-              alt={`Logo ${station.entrepriseNom}`}
-              className="h-8 w-8 object-contain"
-            />
-          ) : (
-            <span className="text-xs font-bold text-primary">
-              {station.entrepriseSigle?.substring(0, 2).toUpperCase() || 'ST'}
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
               {station.nom}
             </h3>
             <span className={cn(
-              "px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap",
+              "px-2 py-0.5 rounded-full text-[10px] font-medium",
               statusStyles[station.statut]
             )}>
               {statusLabels[station.statut]}

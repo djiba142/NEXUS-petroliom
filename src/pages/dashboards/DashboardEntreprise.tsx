@@ -1,28 +1,28 @@
 import { useEffect, useState } from 'react';
 import {
   Fuel,
-  TrendingUp,
-  TrendingDown,
-  Package,
   AlertTriangle,
-  BarChart3,
+  CheckCircle2,
   MapPin,
-  Building2
+  Building2,
+  Phone,
+  Mail,
+  Clock,
+  Plus,
+  History,
+  Loader2,
+  ChevronRight
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { StatCard } from '@/components/dashboard/StatCard';
+import { StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { GuineaMap } from '@/components/map/GuineaMap';
-import { StationCard } from '@/components/stations/StationCard';
-import { Station } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { mockStations } from '@/data/mockData';
+import { regions } from '@/data/mockData';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -42,14 +42,32 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Plus, History } from 'lucide-react';
-// Import logos
-import logoTotal from '@/assets/logos/total-energies.png';
-import logoShell from '@/assets/logos/shell.jpg';
-import logoTMI from '@/assets/logos/tmi.jpg';
-import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
-// Use global Station type
+interface Station {
+  id: string;
+  nom: string;
+  code: string;
+  ville: string;
+  region: string;
+  latitude: number | null;
+  longitude: number | null;
+  type: string;
+  capacite_essence: number;
+  capacite_gasoil: number;
+  stock_essence: number;
+  stock_gasoil: number;
+  nombre_pompes: number;
+  statut: 'ouverte' | 'fermee' | 'en_travaux' | 'attente_validation';
+}
+
+interface Order {
+  id: string;
+  created_at: string;
+  carburant: string;
+  quantite_demandee: number;
+  statut: string;
+  station: { nom: string } | null;
+}
 
 interface Entreprise {
   id: string;
@@ -58,35 +76,89 @@ interface Entreprise {
   type: string;
   region: string;
   logo_url: string | null;
+  contact_nom: string | null;
+  contact_telephone: string | null;
+  contact_email: string | null;
+  numero_agrement: string | null;
+  statut: string;
 }
+
+interface AlertItem {
+  id: string;
+  station_nom: string;
+  message: string;
+  niveau: 'critique' | 'alerte';
+}
+
+const getStockPercentage = (current: number, capacity: number) => {
+  if (capacity <= 0) return 0;
+  return Math.round((current / capacity) * 100);
+};
+
+const getStockLevel = (current: number, capacity: number) => {
+  if (capacity <= 0) return 'healthy';
+  const percentage = (current / capacity) * 100;
+  if (percentage <= 15) return 'critical';
+  if (percentage <= 30) return 'warning';
+  if (percentage >= 85) return 'full';
+  return 'healthy';
+};
+
+const stationStatusStyles: Record<string, string> = {
+  ouverte: 'bg-emerald-100 text-emerald-700',
+  fermee: 'bg-red-100 text-red-700',
+  en_travaux: 'bg-amber-100 text-amber-700',
+  attente_validation: 'bg-blue-100 text-blue-700'
+};
+
+const stationStatusLabels: Record<string, string> = {
+  ouverte: 'Ouverte',
+  fermee: 'Fermée',
+  en_travaux: 'En travaux',
+  attente_validation: 'En attente'
+};
 
 export default function DashboardEntreprise() {
   const { profile, user } = useAuth();
   const [entreprise, setEntreprise] = useState<Entreprise | null>(null);
-  const { toast } = useToast();
-
-  const localLogoMapping: Record<string, string> = {
-    'TOTAL': logoTotal,
-    'TotalEnergies': logoTotal,
-    'TO': logoTotal,
-    'SHELL': logoShell,
-    'VIVO': logoShell,
-    'SH': logoShell,
-    'TMI': logoTMI,
-    'TM': logoTMI,
-    'KP': logoKP,
-  };
   const [stations, setStations] = useState<Station[]>([]);
-  const [livraisons, setLivraisons] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLivraisonDialogOpen, setIsLivraisonDialogOpen] = useState(false);
+  const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingStation, setSavingStation] = useState(false);
+  const { toast } = useToast();
 
   const [newLivraison, setNewLivraison] = useState({
     station_id: '',
     carburant: '',
     quantite: '',
     bon_livraison: '',
+  });
+
+  const [stationForm, setStationForm] = useState({
+    nom: '',
+    code: '',
+    adresse: '',
+    ville: '',
+    region: '',
+    type: 'urbaine' as 'urbaine' | 'routiere' | 'depot',
+    capacite_essence: 50000,
+    capacite_gasoil: 50000,
+    gestionnaire_nom: '',
+    gestionnaire_telephone: '',
+    gestionnaire_email: '',
+  });
+
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [orderForm, setOrderForm] = useState({
+    station_id: 'enterprise_stock', // Default to enterprise stock
+    carburant: '',
+    quantite: '',
+    priorite: 'normale',
+    notes: '',
   });
 
   useEffect(() => {
@@ -107,73 +179,40 @@ export default function DashboardEntreprise() {
         .maybeSingle();
 
       if (entrepriseError) throw entrepriseError;
-      if (entrepriseData) {
-        setEntreprise({
-          ...entrepriseData,
-          logo_url: entrepriseData.logo_url || localLogoMapping[entrepriseData.sigle] || null,
-        });
-      }
+      setEntreprise(entrepriseData);
 
-      // Fetch stations with entreprise data
+      // Fetch stations
       const { data: stationsData, error: stationsError } = await supabase
         .from('stations')
-        .select('*, entreprises:entreprise_id(nom, sigle, logo_url)')
+        .select('*')
         .eq('entreprise_id', profile?.entreprise_id)
         .order('nom');
 
       if (stationsError) throw stationsError;
+      setStations(stationsData || []);
 
-      const mappedStations: Station[] = (stationsData || []).map(s => ({
-        id: s.id,
-        nom: s.nom,
-        code: s.code,
-        adresse: s.adresse,
-        ville: s.ville,
-        region: s.region,
-        type: s.type as any,
-        entrepriseId: s.entreprise_id,
-        entrepriseNom: (s as any).entreprises?.nom || entrepriseData?.nom || 'Inconnu',
-        entrepriseSigle: (s as any).entreprises?.sigle || entrepriseData?.sigle || '',
-        entrepriseLogo: (s as any).entreprises?.logo_url ||
-          localLogoMapping[(s as any).entreprises?.sigle] ||
-          entrepriseData?.logo_url ||
-          localLogoMapping[entrepriseData?.sigle] ||
-          undefined,
-        capacite: {
-          essence: s.capacite_essence,
-          gasoil: s.capacite_gasoil,
-          gpl: s.capacite_gpl,
-          lubrifiants: s.capacite_lubrifiants,
-        },
-        stockActuel: {
-          essence: s.stock_essence,
-          gasoil: s.stock_gasoil,
-          gpl: s.stock_gpl,
-          lubrifiants: s.stock_lubrifiants,
-        },
-        nombrePompes: s.nombre_pompes,
-        gestionnaire: {
-          nom: s.gestionnaire_nom || 'Non assigné',
-          telephone: s.gestionnaire_telephone || '',
-          email: s.gestionnaire_email || '',
-        },
-        statut: s.statut as any,
-      }));
+      // Fetch User's Orders
+      const { data: ordersData } = await supabase
+        .from('ordres_livraison')
+        .select('*, station:stations(nom)')
+        .eq('entreprise_id', profile?.entreprise_id)
+        .order('created_at', { ascending: false });
 
-      setStations(mappedStations);
+      setOrders(ordersData || []);
 
-      // Fetch recent livraisons for company stations
-      if (stationsData && stationsData.length > 0) {
-        const stationIds = stationsData.map(s => s.id);
-        const { data: livraisonsData } = await supabase
-          .from('livraisons')
-          .select('*, station:stations(nom)')
-          .in('station_id', stationIds)
-          .order('date_livraison', { ascending: false })
-          .limit(10);
+      // Fetch alerts
+      const { data: alertData } = await supabase
+        .from('alertes')
+        .select('*, station:stations(nom)')
+        .eq('entreprise_id', profile?.entreprise_id)
+        .eq('resolu', false);
 
-        setLivraisons(livraisonsData || []);
-      }
+      setAlerts((alertData || []).map(a => ({
+        id: a.id,
+        station_nom: (a as any).station?.nom || 'Station',
+        message: a.message,
+        niveau: a.niveau as 'critique' | 'alerte',
+      })));
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -196,7 +235,6 @@ export default function DashboardEntreprise() {
       const selectedStation = stations.find(s => s.id === newLivraison.station_id);
       if (!selectedStation) throw new Error("Station non trouvée");
 
-      // 1. Record delivery
       const { error: livraisonError } = await supabase
         .from('livraisons')
         .insert({
@@ -210,7 +248,6 @@ export default function DashboardEntreprise() {
 
       if (livraisonError) throw livraisonError;
 
-      // 2. Update stock
       const stockField = `stock_${newLivraison.carburant}`;
       const currentStock = (selectedStation as any)[stockField] || 0;
       const { error: updateError } = await supabase
@@ -225,7 +262,7 @@ export default function DashboardEntreprise() {
         description: "Le stock a été mis à jour avec succès.",
       });
 
-      setIsDialogOpen(false);
+      setIsLivraisonDialogOpen(false);
       setNewLivraison({ station_id: '', carburant: '', quantite: '', bon_livraison: '' });
       fetchData();
     } catch (error: any) {
@@ -239,33 +276,134 @@ export default function DashboardEntreprise() {
     }
   };
 
-  const getStockPercentage = (stock: number, capacity: number) => {
-    if (capacity === 0) return 0;
-    return Math.round((stock / capacity) * 100);
+  const handleSaveStation = async () => {
+    if (!stationForm.nom?.trim() || !stationForm.code?.trim() || !stationForm.adresse?.trim() ||
+      !stationForm.ville?.trim() || !stationForm.region || !profile?.entreprise_id) {
+      toast({
+        variant: 'destructive',
+        title: 'Champs obligatoires manquants',
+        description: "Veuillez remplir le nom, le code, l'adresse, la ville et la région.",
+      });
+      return;
+    }
+
+    setSavingStation(true);
+    try {
+      const { error } = await supabase.from('stations').insert({
+        nom: stationForm.nom.trim(),
+        code: stationForm.code.trim().toUpperCase(),
+        adresse: stationForm.adresse.trim(),
+        ville: stationForm.ville.trim(),
+        region: stationForm.region,
+        type: stationForm.type,
+        entreprise_id: profile.entreprise_id,
+        capacite_essence: stationForm.capacite_essence || 0,
+        capacite_gasoil: stationForm.capacite_gasoil || 0,
+        statut: 'ouverte',
+        gestionnaire_nom: stationForm.gestionnaire_nom.trim() || null,
+        gestionnaire_telephone: stationForm.gestionnaire_telephone.trim() || null,
+        gestionnaire_email: stationForm.gestionnaire_email.trim() || null,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Station créée',
+        description: `${stationForm.nom} a été ajoutée avec succès.`,
+      });
+      setIsStationDialogOpen(false);
+      setStationForm({
+        nom: '', code: '', adresse: '', ville: '', region: '',
+        type: 'urbaine', capacite_essence: 50000, capacite_gasoil: 50000,
+        gestionnaire_nom: '', gestionnaire_telephone: '', gestionnaire_email: '',
+      });
+      fetchData();
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: "Erreur lors de l'enregistrement",
+        description: err.message || "Impossible d'enregistrer la station.",
+      });
+    } finally {
+      setSavingStation(false);
+    }
   };
 
-  const totalCapaciteEssence = stations.reduce((acc, s) => acc + (s.capacite.essence || 0), 0);
-  const totalCapaciteGasoil = stations.reduce((acc, s) => acc + (s.capacite.gasoil || 0), 0);
-  const totalStockEssence = stations.reduce((acc, s) => acc + (s.stockActuel.essence || 0), 0);
-  const totalStockGasoil = stations.reduce((acc, s) => acc + (s.stockActuel.gasoil || 0), 0);
+  const handleSubmitOrder = async () => {
+    if (!orderForm.carburant || !orderForm.quantite) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez remplir le type de carburant et la quantité",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  const stationsAlerte = stations.filter(s => {
-    const essencePercent = getStockPercentage(s.stockActuel.essence, s.capacite.essence);
-    const gasoilPercent = getStockPercentage(s.stockActuel.gasoil, s.capacite.gasoil);
-    return essencePercent < 25 || gasoilPercent < 25;
-  });
+    setSubmitting(true);
+    try {
+      // Logic: if station_id is 'enterprise_stock', we send null for station_id
+      // and rely on entreprise_id being set.
+      const targetStationId = orderForm.station_id === 'enterprise_stock' ? null : orderForm.station_id;
 
-  // Convert stations to mock format for the map
-  const mapStations = stations.map(s => ({
-    ...s,
-    coordonnees: s.coordonnees || undefined,
-  }));
+      const { error } = await supabase.from('ordres_livraison').insert({
+        entreprise_id: profile?.entreprise_id,
+        station_id: targetStationId,
+        carburant: orderForm.carburant,
+        quantite_demandee: parseInt(orderForm.quantite),
+        priorite: orderForm.priorite,
+        notes: orderForm.notes || null,
+        created_by: user?.id,
+        statut: 'en_attente'
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Commande envoyée",
+        description: "Votre commande a été transmise à la SONAP.",
+      });
+      setIsOrderDialogOpen(false);
+      setOrderForm({
+        station_id: 'enterprise_stock',
+        carburant: '',
+        quantite: '',
+        priorite: 'normale',
+        notes: '',
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'envoyer la commande",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Computed stats
+  const totalCapacity = {
+    essence: stations.reduce((sum, s) => sum + (s.capacite_essence || 0), 0),
+    gasoil: stations.reduce((sum, s) => sum + (s.capacite_gasoil || 0), 0),
+  };
+
+  const totalStock = {
+    essence: stations.reduce((sum, s) => sum + (s.stock_essence || 0), 0),
+    gasoil: stations.reduce((sum, s) => sum + (s.stock_gasoil || 0), 0),
+  };
+
+  const essencePercentage = getStockPercentage(totalStock.essence, totalCapacity.essence);
+  const gasoilPercentage = getStockPercentage(totalStock.gasoil, totalCapacity.gasoil);
+
+  const stationsOuvertes = stations.filter(s => s.statut === 'ouverte').length;
+  const alertesCritiques = alerts.filter(a => a.niveau === 'critique').length;
 
   if (loading) {
     return (
       <DashboardLayout title="Dashboard Entreprise" subtitle="Chargement...">
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Chargement des données...</p>
+        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-12 w-12 animate-spin mb-4 opacity-20" />
+          <p>Chargement des données...</p>
         </div>
       </DashboardLayout>
     );
@@ -292,355 +430,671 @@ export default function DashboardEntreprise() {
   }
 
   return (
-    <DashboardLayout
-      title={`Dashboard ${entreprise.sigle}`}
-      subtitle={`Gestion des stations ${entreprise.nom}`}
-    >
-      {/* Entreprise Banner */}
-      <div className="mb-6 p-6 rounded-2xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {entreprise.logo_url ? (
-              <img
-                src={entreprise.logo_url}
-                alt={entreprise.sigle}
-                className="h-16 w-16 rounded-xl bg-white p-2 object-contain"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded-xl bg-white/20 flex items-center justify-center">
-                <Building2 className="h-8 w-8" />
-              </div>
-            )}
-            <div>
-              <h2 className="text-2xl font-bold font-display">{entreprise.nom}</h2>
-              <p className="text-primary-foreground/80">
-                {entreprise.type === 'compagnie' ? 'Compagnie Importatrice' : 'Distributeur'} • {entreprise.region}
-              </p>
-            </div>
-          </div>
-          <div className="hidden md:flex items-center gap-4 text-right">
-            <div>
-              <p className="text-3xl font-bold">{stations.length}</p>
-              <p className="text-sm text-primary-foreground/80">stations actives</p>
-            </div>
+    <>
+      <DashboardLayout
+        title={entreprise.nom}
+        subtitle={`${entreprise.type === 'compagnie' ? 'Compagnie' : 'Distributeur'} - ${entreprise.region}`}
+      >
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 mb-6">
+          <Button className="gap-2" onClick={() => setIsLivraisonDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Ravitaillement
+          </Button>
+          <Button className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => setIsOrderDialogOpen(true)}>
+            <Building2 className="h-4 w-4" />
+            Commander du Stock (SONAP)
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => setIsStationDialogOpen(true)}>
+            <MapPin className="h-4 w-4" />
+            Nouvelle Station
+          </Button>
+        </div>
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="bg-white/10 border-white/20 hover:bg-white/20 text-white gap-2">
-                  <Plus className="h-4 w-4" />
-                  Ravitaillement
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Enregistrer une Livraison</DialogTitle>
-                  <DialogDescription>
-                    Mise à jour directe du stock pour une de vos stations.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="station">Station *</Label>
-                    <Select
-                      value={newLivraison.station_id}
-                      onValueChange={(v) => setNewLivraison({ ...newLivraison, station_id: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choisir la station" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stations.map(s => (
-                          <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="carburant">Carburant *</Label>
-                      <Select
-                        value={newLivraison.carburant}
-                        onValueChange={(v) => setNewLivraison({ ...newLivraison, carburant: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="essence">Essence</SelectItem>
-                          <SelectItem value="gasoil">Gasoil</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="quantite">Quantité (L) *</Label>
-                      <Input
-                        id="quantite"
-                        type="number"
-                        placeholder="Ex: 10000"
-                        value={newLivraison.quantite}
-                        onChange={(e) => setNewLivraison({ ...newLivraison, quantite: e.target.value })}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Info & Contact & Stats */}
+          <div className="space-y-6">
+            {/* Company Info */}
+            <Card>
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 rounded-xl bg-white flex items-center justify-center border border-border overflow-hidden">
+                    {entreprise.logo_url ? (
+                      <img
+                        src={entreprise.logo_url}
+                        alt={`Logo ${entreprise.sigle}`}
+                        className="h-14 w-14 object-contain"
                       />
-                    </div>
+                    ) : (
+                      <span className="text-2xl font-bold text-primary">
+                        {entreprise.sigle.substring(0, 2).toUpperCase()}
+                      </span>
+                    )}
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="bon">Bon de Livraison</Label>
-                    <Input
-                      id="bon"
-                      placeholder="N° BL"
-                      value={newLivraison.bon_livraison}
-                      onChange={(e) => setNewLivraison({ ...newLivraison, bon_livraison: e.target.value })}
-                    />
+                  <div>
+                    <CardTitle className="text-xl">{entreprise.sigle}</CardTitle>
+                    <span className={cn(
+                      "inline-flex px-2 py-0.5 rounded-full text-xs font-medium border mt-1",
+                      entreprise.statut === 'actif' && 'bg-emerald-100 text-emerald-700 border-emerald-200',
+                      entreprise.statut === 'suspendu' && 'bg-amber-100 text-amber-700 border-amber-200',
+                      entreprise.statut === 'ferme' && 'bg-red-100 text-red-700 border-red-200'
+                    )}>
+                      {entreprise.statut === 'actif' ? 'Actif' : entreprise.statut === 'suspendu' ? 'Suspendu' : 'Fermé'}
+                    </span>
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Annuler</Button>
-                  <Button onClick={handleSubmitLivraison} disabled={submitting}>
-                    {submitting ? "Enregistrement..." : "Confirmer la réception"}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {entreprise.numero_agrement && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span>N° Agrément: <strong>{entreprise.numero_agrement}</strong></span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>{entreprise.region}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Contact Principal</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="font-medium">{entreprise.contact_nom || 'Non renseigné'}</p>
+                  <p className="text-sm text-muted-foreground">Responsable</p>
+                </div>
+                {entreprise.contact_telephone && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <a href={`tel:${entreprise.contact_telephone}`} className="hover:text-primary">
+                      {entreprise.contact_telephone}
+                    </a>
+                  </div>
+                )}
+                {entreprise.contact_email && (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <a href={`mailto:${entreprise.contact_email}`} className="hover:text-primary">
+                      {entreprise.contact_email}
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Statistiques Globales</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-secondary/50">
+                    <Fuel className="h-5 w-5 mx-auto text-primary mb-1" />
+                    <p className="text-2xl font-bold">{stations.length}</p>
+                    <p className="text-xs text-muted-foreground">Stations</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-secondary/50">
+                    <CheckCircle2 className="h-5 w-5 mx-auto text-stock-healthy mb-1" />
+                    <p className="text-2xl font-bold">{stationsOuvertes}</p>
+                    <p className="text-xs text-muted-foreground">Ouvertes</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-secondary/50">
+                    <AlertTriangle className="h-5 w-5 mx-auto text-stock-critical mb-1" />
+                    <p className="text-2xl font-bold">{alertesCritiques}</p>
+                    <p className="text-xs text-muted-foreground">Alertes</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-secondary/50">
+                    <Clock className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+                    <p className="text-2xl font-bold">{stations.filter(s => s.statut === 'attente_validation').length}</p>
+                    <p className="text-xs text-muted-foreground">En attente</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column - Stations & Stock */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Stock Overview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Stock Global de l'Entreprise</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Essence */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Essence Super</span>
+                      <StockBadge percentage={essencePercentage} />
+                    </div>
+                    <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          getStockLevel(totalStock.essence, totalCapacity.essence) === 'critical' && "bg-stock-critical",
+                          getStockLevel(totalStock.essence, totalCapacity.essence) === 'warning' && "bg-stock-warning",
+                          getStockLevel(totalStock.essence, totalCapacity.essence) === 'healthy' && "bg-stock-healthy",
+                          getStockLevel(totalStock.essence, totalCapacity.essence) === 'full' && "bg-stock-full"
+                        )}
+                        style={{ width: `${Math.min(essencePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {totalStock.essence.toLocaleString()} / {totalCapacity.essence.toLocaleString()} L
+                    </p>
+                  </div>
+
+                  {/* Gasoil */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Gasoil</span>
+                      <StockBadge percentage={gasoilPercentage} />
+                    </div>
+                    <div className="h-3 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'critical' && "bg-stock-critical",
+                          getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'warning' && "bg-stock-warning",
+                          getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'healthy' && "bg-stock-healthy",
+                          getStockLevel(totalStock.gasoil, totalCapacity.gasoil) === 'full' && "bg-stock-full"
+                        )}
+                        style={{ width: `${Math.min(gasoilPercentage, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {totalStock.gasoil.toLocaleString()} / {totalCapacity.gasoil.toLocaleString()} L
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stock Evolution Chart */}
+            <StockEvolutionChart
+              entrepriseId={profile?.entreprise_id}
+              title="Évolution des stocks de l'entreprise"
+            />
+
+            {/* Orders List */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Commandes en cours</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={fetchData} className="h-8 w-8 p-0" title="Actualiser">
+                    <History className="h-4 w-4" />
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {orders.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Aucune commande récente</p>
+                  ) : (
+                    orders.map(order => (
+                      <div key={order.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {order.carburant.toUpperCase()} - {order.quantite_demandee.toLocaleString()} L
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(order.created_at).toLocaleDateString()} • {order.station?.nom || '🏢 Stock Central'}
+                          </p>
+                        </div>
+                        <span className={cn(
+                          "px-2 py-1 rounded-full text-xs font-medium",
+                          order.statut === 'en_attente' && "bg-yellow-100 text-yellow-800",
+                          order.statut === 'approuve' && "bg-blue-100 text-blue-800",
+                          order.statut === 'en_cours' && "bg-purple-100 text-purple-800",
+                          order.statut === 'livre' && "bg-green-100 text-green-800",
+                          order.statut === 'annule' && "bg-red-100 text-red-800",
+                        )}>
+                          {order.statut.replace('_', ' ')}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stations List */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Stations ({stations.length})</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsStationDialogOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  Ajouter
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {stations.map(station => {
+                    const essencePercent = getStockPercentage(station.stock_essence, station.capacite_essence);
+                    const gasoilPercent = getStockPercentage(station.stock_gasoil, station.capacite_gasoil);
+                    const essenceLevel = getStockLevel(station.stock_essence, station.capacite_essence);
+                    const gasoilLevel = getStockLevel(station.stock_gasoil, station.capacite_gasoil);
+                    const worstLevel = essenceLevel === 'critical' || gasoilLevel === 'critical'
+                      ? 'critical'
+                      : essenceLevel === 'warning' || gasoilLevel === 'warning'
+                        ? 'warning'
+                        : 'healthy';
+
+                    return (
+                      <Link
+                        key={station.id}
+                        to={`/stations/${station.id}`}
+                        className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-primary/30 hover:bg-secondary/50 transition-all group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "h-10 w-10 rounded-lg flex items-center justify-center",
+                            worstLevel === 'critical' && "bg-destructive/10",
+                            worstLevel === 'warning' && "bg-amber-100",
+                            worstLevel === 'healthy' && "bg-emerald-100"
+                          )}>
+                            <Fuel className={cn(
+                              "h-5 w-5",
+                              worstLevel === 'critical' && "text-stock-critical",
+                              worstLevel === 'warning' && "text-stock-warning",
+                              worstLevel === 'healthy' && "text-stock-healthy"
+                            )} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium group-hover:text-primary transition-colors">
+                                {station.nom}
+                              </h3>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full text-[10px] font-medium",
+                                stationStatusStyles[station.statut]
+                              )}>
+                                {stationStatusLabels[station.statut]}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{station.ville} • {station.code}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <div className="text-right hidden sm:block">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-muted-foreground">Essence:</span>
+                              <StockBadge percentage={essencePercent} size="sm" />
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-muted-foreground">Gasoil:</span>
+                              <StockBadge percentage={gasoilPercent} size="sm" />
+                            </div>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                        </div>
+                      </Link>
+                    );
+                  })}
+
+                  {stations.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Fuel className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>Aucune station enregistrée</p>
+                      <Button variant="outline" className="mt-3 gap-2" onClick={() => setIsStationDialogOpen(true)}>
+                        <Plus className="h-4 w-4" />
+                        Ajouter une station
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Alerts */}
+            {alerts.length > 0 && (
+              <Card className="border-stock-critical/30">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-stock-critical" />
+                    Alertes Actives ({alerts.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {alerts.slice(0, 5).map(alert => (
+                      <div
+                        key={alert.id}
+                        className={cn(
+                          "p-3 rounded-lg border",
+                          alert.niveau === 'critique'
+                            ? "bg-destructive/5 border-destructive/20"
+                            : "bg-amber-50 border-amber-200"
+                        )}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{alert.station_nom}</p>
+                            <p className="text-sm text-muted-foreground">{alert.message}</p>
+                          </div>
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-medium",
+                            alert.niveau === 'critique'
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-amber-100 text-amber-700"
+                          )}>
+                            {alert.niveau === 'critique' ? 'Critique' : 'Alerte'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
-      </div>
+      </DashboardLayout>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Stock Essence"
-          value={`${getStockPercentage(totalStockEssence, totalCapaciteEssence)}%`}
-          subtitle={`${(totalStockEssence / 1000).toFixed(0)}k / ${(totalCapaciteEssence / 1000).toFixed(0)}k L`}
-          icon={Fuel}
-          variant={getStockPercentage(totalStockEssence, totalCapaciteEssence) < 25 ? 'warning' : 'success'}
-        />
-        <StatCard
-          title="Stock Gasoil"
-          value={`${getStockPercentage(totalStockGasoil, totalCapaciteGasoil)}%`}
-          subtitle={`${(totalStockGasoil / 1000).toFixed(0)}k / ${(totalCapaciteGasoil / 1000).toFixed(0)}k L`}
-          icon={Fuel}
-          variant={getStockPercentage(totalStockGasoil, totalCapaciteGasoil) < 25 ? 'warning' : 'success'}
-        />
-        <StatCard
-          title="Stations actives"
-          value={stations.filter(s => s.statut === 'ouverte').length}
-          subtitle={`sur ${stations.length} total`}
-          icon={MapPin}
-        />
-        <StatCard
-          title="En alerte"
-          value={stationsAlerte.length}
-          subtitle="besoin ravitaillement"
-          icon={AlertTriangle}
-          variant={stationsAlerte.length > 0 ? 'critical' : 'default'}
-        />
-      </div>
-
-      {/* Map & Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-primary" />
-                Mes Stations
-              </CardTitle>
-              <CardDescription>
-                Localisation et niveau de stock
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <GuineaMap
-                stations={mapStations.length > 0 ? mapStations : mockStations.slice(0, 3)}
-                height="350px"
-                showControls={false}
+      {/* Livraison Dialog */}
+      <Dialog open={isLivraisonDialogOpen} onOpenChange={setIsLivraisonDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Enregistrer une Livraison</DialogTitle>
+            <DialogDescription>
+              Mise à jour directe du stock pour une de vos stations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="station">Station *</Label>
+              <Select
+                value={newLivraison.station_id}
+                onValueChange={(v) => setNewLivraison({ ...newLivraison, station_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir la station" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stations.map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="carburant">Carburant *</Label>
+                <Select
+                  value={newLivraison.carburant}
+                  onValueChange={(v) => setNewLivraison({ ...newLivraison, carburant: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="essence">Essence</SelectItem>
+                    <SelectItem value="gasoil">Gasoil</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="quantite">Quantité (L) *</Label>
+                <Input
+                  id="quantite"
+                  type="number"
+                  placeholder="Ex: 10000"
+                  value={newLivraison.quantite}
+                  onChange={(e) => setNewLivraison({ ...newLivraison, quantite: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="bon">Bon de Livraison</Label>
+              <Input
+                id="bon"
+                placeholder="N° BL"
+                value={newLivraison.bon_livraison}
+                onChange={(e) => setNewLivraison({ ...newLivraison, bon_livraison: e.target.value })}
               />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Stock by Station */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              Stocks par Station
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {stations.length === 0 ? (
-              <div className="text-center py-4 space-y-3">
-                <p className="text-muted-foreground">Aucune station enregistrée</p>
-                <Button variant="outline" className="gap-2" asChild>
-                  <Link to="/stations">
-                    <Plus className="h-4 w-4" />
-                    Ajouter une station
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              stations.slice(0, 5).map((station) => {
-                const essencePercent = getStockPercentage(station.stockActuel.essence, station.capacite.essence);
-                const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
-
-                return (
-                  <div key={station.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate">{station.nom}</span>
-                      <span className="text-xs text-muted-foreground">{station.ville}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-amber-600">Essence</span>
-                          <span>{essencePercent}%</span>
-                        </div>
-                        <Progress
-                          value={essencePercent}
-                          className={`h-1.5 ${essencePercent < 25 ? '[&>div]:bg-red-500' : '[&>div]:bg-amber-500'}`}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-emerald-600">Gasoil</span>
-                          <span>{gasoilPercent}%</span>
-                        </div>
-                        <Progress
-                          value={gasoilPercent}
-                          className={`h-1.5 ${gasoilPercent < 25 ? '[&>div]:bg-red-500' : '[&>div]:bg-emerald-500'}`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            {stations.length > 5 && (
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/stations">Voir toutes les stations</Link>
-              </Button>
-            )}
-            <Button variant="outline" className="w-full mt-2 gap-2" asChild>
-              <Link to="/stations">
-                <Plus className="h-4 w-4" />
-                Ajouter une station
-              </Link>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLivraisonDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSubmitLivraison} disabled={submitting}>
+              {submitting ? "Enregistrement..." : "Confirmer la réception"}
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <StockEvolutionChart title="Évolution des Stocks" />
-
-        {/* Alerts */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Stations en Alerte
-                </CardTitle>
-                <CardDescription>
-                  Besoin de ravitaillement
-                </CardDescription>
+      {/* Station Creation Dialog */}
+      <Dialog open={isStationDialogOpen} onOpenChange={setIsStationDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Nouvelle station</DialogTitle>
+            <DialogDescription>
+              Ajouter une station à {entreprise?.nom || 'votre entreprise'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+              <Label>Nom de la station *</Label>
+              <Input
+                value={stationForm.nom}
+                onChange={(e) => setStationForm({ ...stationForm, nom: e.target.value })}
+                placeholder="Ex: Station Centre-ville"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Code unique *</Label>
+              <Input
+                value={stationForm.code}
+                onChange={(e) => setStationForm({ ...stationForm, code: e.target.value })}
+                placeholder="Ex: TE-CON-001"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Adresse *</Label>
+              <Input
+                value={stationForm.adresse}
+                onChange={(e) => setStationForm({ ...stationForm, adresse: e.target.value })}
+                placeholder="Ex: Avenue de la République"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Ville *</Label>
+                <Input
+                  value={stationForm.ville}
+                  onChange={(e) => setStationForm({ ...stationForm, ville: e.target.value })}
+                  placeholder="Ex: Conakry"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Région *</Label>
+                <Select
+                  value={stationForm.region}
+                  onValueChange={(v) => setStationForm({ ...stationForm, region: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {regions.map(r => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {stationsAlerte.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">
-                  Aucune station en alerte
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Tous les stocks sont suffisants
-                </p>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select
+                value={stationForm.type}
+                onValueChange={(v: 'urbaine' | 'routiere' | 'depot') => setStationForm({ ...stationForm, type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="urbaine">Urbaine</SelectItem>
+                  <SelectItem value="routiere">Routière</SelectItem>
+                  <SelectItem value="depot">Dépôt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Capacité essence (L)</Label>
+                <Input
+                  type="number"
+                  value={stationForm.capacite_essence || ''}
+                  onChange={(e) => setStationForm({ ...stationForm, capacite_essence: parseInt(e.target.value) || 0 })}
+                  placeholder="50000"
+                />
               </div>
-            ) : (
-              <div className="space-y-3">
-                {stationsAlerte.map((station) => {
-                  const essencePercent = getStockPercentage(station.stockActuel.essence, station.capacite.essence);
-                  const gasoilPercent = getStockPercentage(station.stockActuel.gasoil, station.capacite.gasoil);
-
-                  return (
-                    <div
-                      key={station.id}
-                      className="p-3 rounded-lg bg-red-50 border border-red-200"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{station.nom}</span>
-                        <Badge variant="destructive">
-                          {Math.min(essencePercent, gasoilPercent)}%
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {station.ville}, {station.region}
-                      </p>
-                      <div className="flex gap-4 mt-2 text-xs">
-                        {essencePercent < 25 && (
-                          <span className="text-red-600">
-                            Essence: {essencePercent}%
-                          </span>
-                        )}
-                        {gasoilPercent < 25 && (
-                          <span className="text-red-600">
-                            Gasoil: {gasoilPercent}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Deliveries log */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="h-5 w-5 text-primary" />
-                  Ravitaillements Récents
-                </CardTitle>
-                <CardDescription>
-                  Dernières réceptions de stock
-                </CardDescription>
+              <div className="space-y-2">
+                <Label>Capacité gasoil (L)</Label>
+                <Input
+                  type="number"
+                  value={stationForm.capacite_gasoil || ''}
+                  onChange={(e) => setStationForm({ ...stationForm, capacite_gasoil: parseInt(e.target.value) || 0 })}
+                  placeholder="50000"
+                />
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            {livraisons.length === 0 ? (
-              <div className="text-center py-8">
-                <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-20" />
-                <p className="text-muted-foreground">Aucun ravitaillement récent</p>
+            <div className="space-y-2">
+              <Label>Gestionnaire (nom)</Label>
+              <Input
+                value={stationForm.gestionnaire_nom}
+                onChange={(e) => setStationForm({ ...stationForm, gestionnaire_nom: e.target.value })}
+                placeholder="Nom du gestionnaire"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStationDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveStation} disabled={savingStation}>
+              {savingStation ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Enregistrement...
+                </>
+              ) : (
+                'Enregistrer'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Creation Dialog */}
+      <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Passer une commande à la SONAP</DialogTitle>
+            <DialogDescription>
+              Commandez du carburant pour votre entreprise ou une station spécifique.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Destination</Label>
+              <Select
+                value={orderForm.station_id}
+                onValueChange={(v) => setOrderForm({ ...orderForm, station_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choisir la destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="enterprise_stock" className="font-semibold">
+                    🏢 Stock Entreprise / Dépôt Central
+                  </SelectItem>
+                  {stations.map(s => (
+                    <SelectItem key={s.id} value={s.id}>⛽ {s.nom}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Sélectionnez "Stock Entreprise" si vous n'avez pas encore déterminé la station de destination.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Carburant *</Label>
+                <Select
+                  value={orderForm.carburant}
+                  onValueChange={(v) => setOrderForm({ ...orderForm, carburant: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="essence">Essence</SelectItem>
+                    <SelectItem value="gasoil">Gasoil</SelectItem>
+                    <SelectItem value="gpl">GPL</SelectItem>
+                    <SelectItem value="lubrifiants">Lubrifiants</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {livraisons.map((liv) => (
-                  <div key={liv.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 border border-border">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold">{(liv as any).station?.nom || 'Station'}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(liv.date_livraison).toLocaleDateString()} • {liv.carburant}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-primary">+{liv.quantite.toLocaleString()} L</span>
-                      {liv.bon_livraison && <p className="text-[10px] text-muted-foreground">BL: {liv.bon_livraison}</p>}
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <Label>Quantité (L/Tonnes) *</Label>
+                <Input
+                  type="number"
+                  value={orderForm.quantite}
+                  onChange={(e) => setOrderForm({ ...orderForm, quantite: e.target.value })}
+                  placeholder="Ex: 50000"
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </DashboardLayout>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Priorité</Label>
+              <Select
+                value={orderForm.priorite}
+                onValueChange={(v) => setOrderForm({ ...orderForm, priorite: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normale">Normale</SelectItem>
+                  <SelectItem value="haute">Haute</SelectItem>
+                  <SelectItem value="urgente" className="text-red-600">Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes (Optionnel)</Label>
+              <Input
+                value={orderForm.notes}
+                onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })}
+                placeholder="Instructions particulières..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOrderDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSubmitOrder} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Envoi...
+                </>
+              ) : (
+                'Envoyer la commande'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

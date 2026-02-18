@@ -20,11 +20,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-// Import logos
-import logoTotal from '@/assets/logos/total-energies.png';
-import logoShell from '@/assets/logos/shell.jpg';
-import logoTMI from '@/assets/logos/tmi.jpg';
-import logoKP from '@/assets/logos/kamsar-petroleum.png';
 import type { Entreprise, Station, Alert } from '@/types';
 
 const getStockPercentage = (current: number, capacity: number) => {
@@ -124,7 +119,7 @@ export default function EntrepriseDetailPage() {
 
         const { data: stData, error: stErr } = await supabase
           .from('stations')
-          .select('*')
+          .select('*, entreprises:entreprise_id(nom, sigle, logo_url)')
           .eq('entreprise_id', id);
 
         if (stErr) throw stErr;
@@ -139,8 +134,6 @@ export default function EntrepriseDetailPage() {
           type: s.type as 'urbaine' | 'routiere' | 'depot',
           entrepriseId: s.entreprise_id,
           entrepriseNom: entData.nom,
-          entrepriseSigle: entData.sigle,
-          entrepriseLogo: entData.logo_url || undefined,
           capacite: {
             essence: s.capacite_essence,
             gasoil: s.capacite_gasoil,

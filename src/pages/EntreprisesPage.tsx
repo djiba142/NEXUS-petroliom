@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Loader2, Upload } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { EntrepriseCard } from '@/components/entreprises/EntrepriseCard';
-import { regions } from '@/data/mockData';
+import { regions, getEnterpriseLogo } from '@/data/mockData';
 import { supabase } from '@/integrations/supabase/client';
 // Import logos
 import logoTotal from '@/assets/logos/total-energies.png';
@@ -104,7 +104,7 @@ export default function EntreprisesPage() {
         region: e.region,
         statut: e.statut as 'actif' | 'suspendu' | 'ferme',
         nombreStations: counts[e.id] ?? 0,
-        logo: e.logo_url || localLogoMapping[e.sigle] || undefined,
+        logo: e.logo_url ?? undefined,
         contact: {
           nom: e.contact_nom || 'N/A',
           telephone: e.contact_telephone || '',

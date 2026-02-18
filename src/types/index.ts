@@ -40,8 +40,6 @@ export interface Station {
   type: StationType;          // ← maintenant compatible avec n'importe quelle string
   entrepriseId: string;
   entrepriseNom: string;
-  entrepriseSigle: string;
-  entrepriseLogo?: string;
   capacite: {
     essence: number;
     gasoil: number;
