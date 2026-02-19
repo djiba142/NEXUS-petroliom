@@ -5,9 +5,10 @@ import { cn } from '@/lib/utils';
 interface AlertCardProps {
   alert: Alert;
   onResolve?: (id: string) => void;
+  onSelect?: (alert: Alert) => void;
 }
 
-export function AlertCard({ alert, onResolve }: AlertCardProps) {
+export function AlertCard({ alert, onResolve, onSelect }: AlertCardProps) {
   const isCritical = alert.niveau === 'critique';
   const formattedDate = new Date(alert.dateCreation).toLocaleString('fr-FR', {
     day: '2-digit',
@@ -17,12 +18,16 @@ export function AlertCard({ alert, onResolve }: AlertCardProps) {
   });
 
   return (
-    <div className={cn(
+    <div
+      onClick={() => onSelect && onSelect(alert)}
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      className={cn(
       "p-4 rounded-xl border transition-all duration-200 hover:shadow-md",
       isCritical 
         ? "bg-red-50 border-red-200 hover:border-red-300" 
         : "bg-amber-50 border-amber-200 hover:border-amber-300"
-    )}>
+    ) + (onSelect ? ' cursor-pointer' : '')}>
       <div className="flex items-start gap-3">
         <div className={cn(
           "p-2 rounded-lg flex-shrink-0",
@@ -65,7 +70,7 @@ export function AlertCard({ alert, onResolve }: AlertCardProps) {
 
         {onResolve && (
           <button
-            onClick={() => onResolve(alert.id)}
+            onClick={(e) => { e.stopPropagation(); onResolve(alert.id); }}
             className={cn(
               "p-2 rounded-lg transition-colors",
               isCritical 
@@ -85,10 +90,12 @@ export function AlertCard({ alert, onResolve }: AlertCardProps) {
 interface AlertsListProps {
   alerts: Alert[];
   onResolve?: (id: string) => void;
+  onSelect?: (alert: Alert) => void;
   maxItems?: number;
 }
 
-export function AlertsList({ alerts, onResolve, maxItems }: AlertsListProps) {
+export function AlertsList({ alerts, onResolve, onSelect, maxItems }: AlertsListProps) {
+  // allow parent to listen to selection by using onSelect in AlertCard via spread
   const displayAlerts = maxItems ? alerts.slice(0, maxItems) : alerts;
   const criticalFirst = [...displayAlerts].sort((a, b) => 
     a.niveau === 'critique' && b.niveau !== 'critique' ? -1 : 1
@@ -107,7 +114,7 @@ export function AlertsList({ alerts, onResolve, maxItems }: AlertsListProps) {
   return (
     <div className="space-y-3">
       {criticalFirst.map((alert) => (
-        <AlertCard key={alert.id} alert={alert} onResolve={onResolve} />
+        <AlertCard key={alert.id} alert={alert} onResolve={onResolve} onSelect={onSelect} />
       ))}
     </div>
   );

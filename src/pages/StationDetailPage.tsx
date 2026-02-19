@@ -7,8 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StockIndicator, StockBadge } from '@/components/dashboard/StockIndicator';
 import { StockEvolutionChart } from '@/components/charts/StockEvolutionChart';
-import { mockStations, mockAlerts, prixOfficiels } from '@/data/mockData';
+import { mockAlerts, prixOfficiels } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { Station } from '@/types';
 import { cn } from '@/lib/utils';
+// Import logos
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
 const typeLabels = {
   urbaine: 'Urbaine',
@@ -45,8 +52,117 @@ const mockDeliveries = [
 
 export default function StationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const station = mockStations.find(s => s.id === id);
-  const stationAlerts = mockAlerts.filter(a => a.stationId === id && !a.resolu);
+  const [station, setStation] = useState<Station | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const localLogoMapping: Record<string, string> = {
+    'TOTAL': logoTotal,
+    'TotalEnergies': logoTotal,
+    'TO': logoTotal,
+    'SHELL': logoShell,
+    'VIVO': logoShell,
+    'SH': logoShell,
+    'TMI': logoTMI,
+    'TM': logoTMI,
+    'KP': logoKP,
+    'Kamsar Petroleum': logoKP,
+    'kamsar petroleum': logoKP,
+  };
+
+  const getLogoForEntreprise = (sigle: string, nom: string): string | undefined => {
+    // Essayer d'abord avec le sigle
+    if (localLogoMapping[sigle]) {
+      return localLogoMapping[sigle];
+    }
+    // Essayer avec le nom
+    if (localLogoMapping[nom]) {
+      return localLogoMapping[nom];
+    }
+    // Essayer les variations du nom
+    const nomVariations = [
+      nom.split('(')[0].trim(), // "Vivo Energy Guinée"
+      nom.split('-')[0].trim(), // Pour les noms avec tiret
+    ];
+    for (const variation of nomVariations) {
+      if (localLogoMapping[variation]) {
+        return localLogoMapping[variation];
+      }
+    }
+    return undefined;
+  };
+
+  useEffect(() => {
+    const fetchStation = async () => {
+      if (!id) {
+        setError('Station ID manquant');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data: stData, error: stError } = await supabase
+          .from('stations')
+          .select(`
+            *,
+            entreprises:entreprise_id(nom, sigle, logo_url)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (stError) throw stError;
+        if (!stData) {
+          setError(`Aucune station trouvée avec l'ID "${id}"`);
+          setLoading(false);
+          return;
+        }
+
+        const mapped: Station = {
+          id: stData.id,
+          nom: stData.nom,
+          code: stData.code,
+          adresse: stData.adresse,
+          ville: stData.ville,
+          region: stData.region,
+          type: stData.type as any,
+          entrepriseId: stData.entreprise_id,
+          entrepriseNom: stData.entreprises?.nom || 'Inconnu',
+          entrepriseSigle: stData.entreprises?.sigle || '',
+          entrepriseLogo: stData.entreprises?.logo_url ?? getLogoForEntreprise(stData.entreprises?.sigle || '', stData.entreprises?.nom || ''),
+          capacite: {
+            essence: stData.capacite_essence || 0,
+            gasoil: stData.capacite_gasoil || 0,
+            gpl: stData.capacite_gpl || 0,
+            lubrifiants: stData.capacite_lubrifiants || 0,
+          },
+          stockActuel: {
+            essence: stData.stock_essence || 0,
+            gasoil: stData.stock_gasoil || 0,
+            gpl: stData.stock_gpl || 0,
+            lubrifiants: stData.stock_lubrifiants || 0,
+          },
+          nombrePompes: stData.nombre_pompes || 0,
+          gestionnaire: {
+            nom: stData.gestionnaire_nom || 'Non assigné',
+            telephone: stData.gestionnaire_telephone || '',
+            email: stData.gestionnaire_email || '',
+          },
+          statut: stData.statut as any,
+        };
+
+        setStation(mapped);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : 'Erreur lors du chargement de la station';
+        setError(errMsg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStation();
+  }, [id]);
+
+  const stationAlerts = station ? mockAlerts.filter(a => a.stationId === station.id && !a.resolu) : [];
 
   if (loading) {
     return (

@@ -21,6 +21,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Entreprise, Station, Alert } from '@/types';
+// Local logos mapping
+import logoTotal from '@/assets/logos/total-energies.png';
+import logoShell from '@/assets/logos/shell.jpg';
+import logoTMI from '@/assets/logos/tmi.jpg';
+import logoKP from '@/assets/logos/kamsar-petroleum.png';
 
 const getStockPercentage = (current: number, capacity: number) => {
   if (capacity <= 0) return 0;
@@ -231,7 +236,7 @@ export default function EntrepriseDetailPage() {
       subtitle={`${entreprise.type === 'compagnie' ? 'Compagnie' : 'Distributeur'} - ${entreprise.region}`}
     >
       {/* Back Button */}
-      <Link to="/entreprises" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <Link to="/entreprises" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors no-underline">
         <ArrowLeft className="h-4 w-4" />
         Retour aux entreprises
       </Link>
@@ -292,13 +297,13 @@ export default function EntrepriseDetailPage() {
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Phone className="h-4 w-4 text-muted-foreground" />
-                <a href={`tel:${entreprise.contact.telephone}`} className="hover:text-primary">
+                <a href={`tel:${entreprise.contact.telephone}`} className="hover:text-primary no-underline">
                   {entreprise.contact.telephone}
                 </a>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Mail className="h-4 w-4 text-muted-foreground" />
-                <a href={`mailto:${entreprise.contact.email}`} className="hover:text-primary">
+                <a href={`mailto:${entreprise.contact.email}`} className="hover:text-primary no-underline">
                   {entreprise.contact.email}
                 </a>
               </div>

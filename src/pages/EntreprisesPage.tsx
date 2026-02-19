@@ -71,6 +71,30 @@ export default function EntreprisesPage() {
     'TMI': logoTMI,
     'TM': logoTMI,
     'KP': logoKP,
+    'Kamsar Petroleum': logoKP,
+    'kamsar petroleum': logoKP,
+  };
+
+  const getLogoForEntreprise = (sigle: string, nom: string): string | undefined => {
+    // Essayer d'abord avec le sigle
+    if (localLogoMapping[sigle]) {
+      return localLogoMapping[sigle];
+    }
+    // Essayer avec le nom
+    if (localLogoMapping[nom]) {
+      return localLogoMapping[nom];
+    }
+    // Essayer les variations du nom
+    const nomVariations = [
+      nom.split('(')[0].trim(), // "Vivo Energy Guinée"
+      nom.split('-')[0].trim(), // Pour les noms avec tiret
+    ];
+    for (const variation of nomVariations) {
+      if (localLogoMapping[variation]) {
+        return localLogoMapping[variation];
+      }
+    }
+    return undefined;
   };
 
   const { toast } = useToast();
@@ -104,7 +128,7 @@ export default function EntreprisesPage() {
         region: e.region,
         statut: e.statut as 'actif' | 'suspendu' | 'ferme',
         nombreStations: counts[e.id] ?? 0,
-        logo: e.logo_url ?? undefined,
+        logo: e.logo_url ?? getLogoForEntreprise(e.sigle, e.nom),
         contact: {
           nom: e.contact_nom || 'N/A',
           telephone: e.contact_telephone || '',
@@ -176,7 +200,7 @@ export default function EntreprisesPage() {
       toast({
         variant: 'destructive',
         title: 'Erreur upload',
-        description: 'Impossible de télécharger le logo.',
+        description: err instanceof Error ? err.message : 'Impossible de télécharger le logo.',
       });
       return null;
     }
