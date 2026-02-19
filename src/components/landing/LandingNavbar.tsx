@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import logo from '@/assets/logo.png';
 
 export const LandingNavbar = () => {
     const { user } = useAuth();
@@ -10,15 +11,17 @@ export const LandingNavbar = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-20">
                     <div className="flex items-center">
-                        <img
-                            src="/src/assets/logo.png"
-                            alt="NEXUS Logo"
-                            className="h-20 w-auto"
-                        />
+                        <Link to="/">
+                            <img
+                                src={logo}
+                                alt="NEXUS Logo"
+                                className="h-20 w-auto"
+                            />
+                        </Link>
                     </div>
 
                     <div className="hidden md:flex items-center gap-8">
-                        <a href="#" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Accueil</a>
+                        <Link to="/" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Accueil</Link>
                         <Link to="/documentation" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Documentation</Link>
                         <a href="#features" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Fonctionnalités</a>
                         <a href="#services" className="text-sm font-semibold hover:text-[#f97316] transition-colors">Services</a>

@@ -77,15 +77,13 @@ export const LandingFeatures = () => {
                         </div>
                         <div className="lg:w-1/2 relative">
                             <div className="bg-gradient-to-br from-blue-500/20 to-orange-500/30 absolute inset-0 blur-[100px] rounded-full animate-pulse" />
-                            <div className="relative rounded-[3rem] border border-white/10 overflow-hidden shadow-[0_35px_60px_-15px_rgba(0,0,0,0.6)] group">
+                            <div className="relative rounded-[3rem] border border-white/10 overflow-hidden shadow-[0_35px_60px_-15px_rgba(0,0,0,0.6)] group bg-slate-800">
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#1e3a8a]/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10" />
                                 <img
-                                    src="/dashboard_preview.png"
+                                    src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=75&w=1000&auto=format&fit=crop"
                                     alt="SIHG Intelligence Dashboard"
-                                    className="w-full h-auto transform group-hover:scale-105 transition-transform duration-[2000ms]"
-                                    onError={(e) => {
-                                        e.currentTarget.src = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1200&auto=format&fit=crop";
-                                    }}
+                                    className="w-full h-auto transform group-hover:scale-105 transition-transform duration-[2000ms] opacity-80 group-hover:opacity-100 transition-opacity"
+                                    loading="lazy"
                                 />
                                 <div className="absolute bottom-10 left-10 right-10 z-20 translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
                                     <Link to="/auth" className="w-full bg-[#f97316] text-white py-5 rounded-2xl font-black text-center block shadow-2xl hover:bg-orange-600 transition-all text-lg">

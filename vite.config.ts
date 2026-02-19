@@ -20,12 +20,7 @@ export default defineConfig({
   },
   build: {
     target: "ES2020",
-    minify: "terser",
-    terserOptions: {
-      compress: {
-        drop_console: true,
-      },
-    },
+    minify: "esbuild",
     cssCodeSplit: true,
     sourcemap: process.env.NODE_ENV !== "production" ? "inline" : false,
     rollupOptions: {

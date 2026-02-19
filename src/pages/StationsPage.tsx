@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Search, Plus, AlertTriangle, RefreshCw, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+// ... other imports stay same, but ensure they are at the top
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StationCard } from '@/components/stations/StationCard';
 import { Button } from '@/components/ui/button';
@@ -64,6 +66,8 @@ const getLogoForEntreprise = (sigle: string, nom: string): string | null => {
   return null;
 };
 
+
+
 export default function StationsPage() {
   const { role: currentUserRole, profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
@@ -72,9 +76,6 @@ export default function StationsPage() {
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [selectedEntreprise, setSelectedEntreprise] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
-  const [stations, setStations] = useState<Station[]>([]);
-  const [entreprises, setEntreprises] = useState<{ id: string; nom: string; sigle: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isStationDialogOpen, setIsStationDialogOpen] = useState(false);
   const [savingStation, setSavingStation] = useState(false);
 
@@ -108,50 +109,51 @@ export default function StationsPage() {
     debouncedUpdate(searchQuery);
   }, [searchQuery]);
 
-  useEffect(() => {
-    fetchData();
-  }, [currentUserRole, currentUserProfile?.entreprise_id]);
-
-  // Reset pagination when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchQuery, selectedRegion, selectedEntreprise, activeTab]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // Entreprises
-      const { data: entData, error: entError } = await supabase
+  // Fetch Entreprises (Cached)
+  const { data: entreprises = [] } = useQuery({
+    queryKey: ['entreprises-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from('entreprises')
-        .select('id, nom, sigle');
-      if (entError) throw entError;
-      setEntreprises(entData || []);
+        .select('id, nom, sigle')
+        .order('nom');
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
-      // Stations
+  // Fetch Stations (Cached & Optimized)
+  const { data: stations = [], isLoading: loading, refetch: fetchData } = useQuery({
+    queryKey: ['stations-list', currentUserRole, currentUserProfile?.entreprise_id],
+    queryFn: async () => {
       let query = supabase.from('stations').select(`
-        *,
-        entreprises:entreprise_id(nom, sigle, logo_url)
+        id, nom, code, adresse, ville, region, type, entreprise_id, 
+        capacite_essence, capacite_gasoil, capacite_gpl, capacite_lubrifiants,
+        stock_essence, stock_gasoil, stock_gpl, stock_lubrifiants,
+        nombre_pompes, statut, 
+        gestionnaire_nom, gestionnaire_telephone, gestionnaire_email,
+        entreprise:entreprises!entreprise_id(nom, sigle, logo_url)
       `);
 
       if (currentUserRole === 'responsable_entreprise' && currentUserProfile?.entreprise_id) {
         query = query.eq('entreprise_id', currentUserProfile.entreprise_id);
       }
 
-      const { data: stData, error: stError } = await query;
-      if (stError) throw stError;
+      const { data, error } = await query;
+      if (error) throw error;
 
-      const mappedStations: Station[] = (stData || []).map(s => ({
+      return (data || []).map((s: any) => ({
         id: s.id,
         nom: s.nom,
         code: s.code,
         adresse: s.adresse,
         ville: s.ville,
         region: s.region,
-        type: s.type as any,
+        type: s.type,
         entrepriseId: s.entreprise_id,
-        entrepriseNom: s.entreprises?.nom || 'Inconnu',
-        entrepriseSigle: s.entreprises?.sigle || '',
-        entrepriseLogo: s.entreprises?.logo_url ?? getLogoForEntreprise(s.entreprises?.sigle || '', s.entreprises?.nom || ''),
+        entrepriseNom: s.entreprise?.nom || 'Inconnu',
+        entrepriseSigle: s.entreprise?.sigle || '',
+        entrepriseLogo: s.entreprise?.logo_url ?? getLogoForEntreprise(s.entreprise?.sigle || '', s.entreprise?.nom || ''),
         capacite: {
           essence: s.capacite_essence || 0,
           gasoil: s.capacite_gasoil || 0,
@@ -170,24 +172,18 @@ export default function StationsPage() {
           telephone: s.gestionnaire_telephone || '',
           email: s.gestionnaire_email || '',
         },
-        statut: s.statut as any,
+        statut: s.statut,
       }));
-
-      setStations(mappedStations);
-    } catch (error) {
-      console.error('Erreur chargement données:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erreur',
-        description: 'Impossible de charger les stations',
-      });
-    } finally {
-      setLoading(false);
     }
-  };
+  });
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery, selectedRegion, selectedEntreprise, activeTab]);
 
   const filteredStations = useMemo(() => {
-    return stations.filter(s => {
+    return stations.filter((s: any) => {
       const matchesSearch =
         s.nom.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
         s.code.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
@@ -220,13 +216,13 @@ export default function StationsPage() {
   const totalPages = Math.ceil(filteredStations.length / ITEMS_PER_PAGE);
 
   const { criticalCount, warningCount } = useMemo(() => {
-    const critical = stations.filter(s => {
+    const critical = stations.filter((s: any) => {
       const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
       const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return essencePercent < 10 || gasoilPercent < 10;
     }).length;
 
-    const warning = stations.filter(s => {
+    const warning = stations.filter((s: any) => {
       const essencePercent = s.capacite.essence > 0 ? Math.round((s.stockActuel.essence / s.capacite.essence) * 100) : 0;
       const gasoilPercent = s.capacite.gasoil > 0 ? Math.round((s.stockActuel.gasoil / s.capacite.gasoil) * 100) : 0;
       return (essencePercent >= 10 && essencePercent < 25) || (gasoilPercent >= 10 && gasoilPercent < 25);
@@ -363,7 +359,7 @@ export default function StationsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={loading}
             className="gap-2"
           >

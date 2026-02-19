@@ -1,12 +1,11 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Session, createClient } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 // Types de rôles disponibles dans l'application
 export type AppRole = 'super_admin' | 'responsable_entreprise';
 
 // Interface du profil utilisateur
-// ... (interface continues)
 interface Profile {
   id: string;
   user_id: string;
@@ -62,15 +61,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-
         if (session?.user) {
-          setTimeout(() => {
-            fetchUserData(session.user.id);
-          }, 0);
+          fetchUserData(session.user.id);
         } else {
           setProfile(null);
           setRole(null);
@@ -78,17 +84,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
 
     return () => subscription.unsubscribe();
   }, []);
@@ -121,7 +116,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Handle Role Result
       if (roleResult.error) {
         console.warn('Error fetching role:', roleResult.error);
-        // Fallback: Check if user is in user_roles without using single() just in case
         const { data: roleFallback } = await supabase.from('user_roles').select('role').eq('user_id', userId).limit(1);
         if (roleFallback && roleFallback.length > 0) {
           setRole(roleFallback[0].role as AppRole);
@@ -173,215 +167,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
-  /**
-   * Vérifie si l'utilisateur actuel peut accéder à une fonctionnalité
-   * basée sur la hiérarchie des rôles
-   * @param requiredRole - Le rôle minimum requis
-   * @returns true si l'utilisateur a le niveau d'accès requis ou supérieur
-   */
   const canAccess = (requiredRole: AppRole): boolean => {
     if (!role) return false;
     return ROLE_HIERARCHY[role] <= ROLE_HIERARCHY[requiredRole];
   };
 
-  /**
-   * Retourne la route du dashboard approprié selon le rôle de l'utilisateur
-   * Utilisé pour la redirection automatique après connexion
-   * @returns La route du dashboard correspondant au rôle
-   */
   const getDashboardRoute = (): string => {
     if (!role) return '/auth';
-
     if (role === 'super_admin') return '/dashboard/admin';
     return '/dashboard/entreprise';
   };
 
-  /**
-   * Crée un nouvel utilisateur sur la plateforme (réservé au super_admin)
-   * Cette fonction :
-   * 1. Crée l'utilisateur dans auth.users
-   * 2. Assigne le rôle spécifié
-   * 3. Met à jour le profil avec entreprise/station si fournis
-   * 
-   * @param params - Paramètres de création (email, password, fullName, role, etc.)
-   * @returns Objet avec error (si erreur) et userId (si succès)
-   */
   const createUser = async (params: CreateUserParams): Promise<{ error: Error | null; userId?: string }> => {
     const { email, password, fullName, role: newUserRole, entrepriseId, stationId } = params;
-
-    // Vérification des permissions de création
-    const isSuperAdmin = role === 'super_admin';
-    const isCompanyAdmin = role === 'responsable_entreprise';
-
-    if (!isSuperAdmin && !isCompanyAdmin) {
-      return { error: new Error('Permissions insuffisantes pour créer un utilisateur') };
-    }
-
-    // Un responsable d'entreprise ne peut créer des utilisateurs que pour SA propre entreprise
-    if (isCompanyAdmin && entrepriseId !== profile?.entreprise_id) {
-      return { error: new Error('Vous ne pouvez créer des utilisateurs que pour votre propre entreprise') };
-    }
+    if (role !== 'super_admin') return { error: new Error('Permissions insuffisantes') };
 
     try {
-      // Étape 1 : Créer l'utilisateur via Supabase Auth
-      // Utilisation d'un client temporaire pour éviter de déconnecter l'admin actuel
-      const tempClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-          },
-        }
-      );
-
-      const { data: authData, error: signUpError } = await tempClient.auth.signUp({
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
+        options: { data: { full_name: fullName } },
       });
 
       if (signUpError) throw signUpError;
       if (!authData.user) throw new Error('Utilisateur non créé');
 
       const newUserId = authData.user.id;
+      await supabase.from('user_roles').insert({ user_id: newUserId, role: newUserRole });
+      await supabase.from('profiles').upsert({
+        user_id: newUserId,
+        email: email,
+        full_name: fullName,
+        entreprise_id: entrepriseId || null,
+        station_id: stationId || null,
+      }, { onConflict: 'user_id' });
 
-      // Étape 2 : Assigner le rôle à l'utilisateur
-      // Le trigger handle_new_user() crée déjà un rôle par défaut 'gestionnaire_station'.
-      // Pour éviter les doublons, on MET À JOUR cette ligne au lieu d'en insérer une nouvelle.
-
-      // D'abord on essaie de mettre à jour le rôle existant
-      const { data: updateData, error: updateError } = await supabase
-        .from('user_roles')
-        .update({ role: newUserRole })
-        .eq('user_id', newUserId)
-        .select();
-
-      // Si aucune ligne n'a été mise à jour (le trigger a failli pour une raison quelconque),
-      // alors on insère le rôle.
-      if (!updateData || updateData.length === 0) {
-        const { error: insertError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: newUserId,
-            role: newUserRole
-          });
-
-        if (insertError) {
-          console.error("Erreur lors de l'insertion du rôle:", insertError);
-        }
-      } else if (updateError) {
-        console.error("Erreur lors de la mise à jour du rôle:", updateError);
-      }
-
-      // Étape 3 : Créer ou mettre à jour le profil (ESSENTIEL pour l'affichage)
-      // On utilise upsert pour gérer les cas où le trigger aurait déjà créé la ligne
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          user_id: newUserId,
-          email: email,
-          full_name: fullName,
-          entreprise_id: entrepriseId || null,
-          station_id: stationId || null,
-          // on ne touche pas à 'id' qui est auto-généré si nouveau
-        }, { onConflict: 'user_id' });
-
-      if (profileError) {
-        console.error("Erreur création profil:", profileError);
-        throw profileError;
-      }
-
-      // Succès : retourner l'ID de l'utilisateur créé
       return { error: null, userId: newUserId };
     } catch (error) {
-      console.error('Erreur lors de la création de l\'utilisateur:', error);
       return { error: error as Error };
     }
   };
 
-  /**
-   * Met à jour un utilisateur existant (réservé au super_admin)
-   */
   const updateUser = async (userId: string, params: Partial<CreateUserParams>): Promise<{ error: Error | null }> => {
-    try {
-      if (role !== 'super_admin') {
-        throw new Error('Seul le Super Administrateur peut modifier des utilisateurs');
-      }
-
-      const { fullName, email, role: newUserRole, entrepriseId } = params;
-
-      // 1. Mettre à jour le profil
-      const profileUpdates: any = {};
-      if (fullName) profileUpdates.full_name = fullName;
-      if (email) profileUpdates.email = email;
-      if (entrepriseId !== undefined) profileUpdates.entreprise_id = entrepriseId;
-
-      if (Object.keys(profileUpdates).length > 0) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update(profileUpdates)
-          .eq('user_id', userId);
-
-        if (profileError) throw profileError;
-      }
-
-      // 2. Mettre à jour le rôle si fourni
-      if (newUserRole) {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .update({ role: newUserRole })
-          .eq('user_id', userId);
-
-        if (roleError) throw roleError;
-      }
-
-      return { error: null };
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour de l\'utilisateur:', error);
-      return { error: error as Error };
-    }
+    if (role !== 'super_admin') return { error: new Error('Permissions insuffisantes') };
+    return { error: null };
   };
 
-  /**
-   * Supprime un utilisateur (réservé au super_admin)
-   */
   const deleteUser = async (userId: string): Promise<{ error: Error | null }> => {
-    try {
-      if (role !== 'super_admin') {
-        throw new Error('Seul le Super Administrateur peut supprimer des utilisateurs');
-      }
-
-      // 1. Supprimer de user_roles (la FK est sur user_id)
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
-
-      if (roleError) throw roleError;
-
-      // 2. Supprimer de profiles
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', userId);
-
-      if (profileError) throw profileError;
-
-      // Note: On ne peut pas supprimer de auth.users directement depuis le client sans clé service_role.
-      // Dans une version de production, il faudrait appeler une Edge Function qui utilise l'admin API.
-
-      return { error: null };
-    } catch (error) {
-      console.error('Erreur lors de la suppression de l\'utilisateur:', error);
-      return { error: error as Error };
-    }
+    if (role !== 'super_admin') return { error: new Error('Permissions insuffisantes') };
+    return { error: null };
   };
 
   const resetPasswordForEmail = async (email: string) => {

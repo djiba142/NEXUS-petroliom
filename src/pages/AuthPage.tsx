@@ -16,7 +16,7 @@ const loginSchema = z.object({
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, resetPasswordForEmail, updatePassword, user } = useAuth();
+  const { signIn, resetPasswordForEmail, updatePassword, user, hasProfile, hasRole, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
@@ -32,16 +32,13 @@ export default function AuthPage() {
   const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
-    if (user && view !== 'reset') {
-      navigate('/panel');
+    // Si l'utilisateur est connecté ET que la vérification du profil est terminée
+    if (user && !authLoading && view !== 'reset') {
+      if (hasProfile && hasRole) {
+        navigate('/panel');
+      }
     }
-
-    // Check if recovery link was clicked
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('type') === 'recovery') {
-      setView('reset');
-    }
-  }, [user, navigate, view]);
+  }, [user, hasProfile, hasRole, authLoading, navigate, view]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,14 +80,9 @@ export default function AuthPage() {
             variant: 'destructive',
           });
         }
-      } else {
-        toast({
-          title: 'Connexion réussie',
-          description: 'Bienvenue sur SIHG',
-        });
-        // La redirection sera gérée par le useEffect qui surveille l'utilisateur
-        // ou on peut rediriger manuellement ici si on a accès au rôle immédiatement
       }
+      // Note: Le succès est géré par la redirection automatique dans useEffect
+      // car fetchUserData mettra à jour hasProfile/hasRole
     } catch (error) {
       toast({
         title: 'Erreur',
@@ -101,6 +93,8 @@ export default function AuthPage() {
       setLoading(false);
     }
   };
+
+  const isUnauthorized = user && (!hasProfile || !hasRole);
 
   return (
     <div className="min-h-screen flex">
@@ -121,13 +115,40 @@ export default function AuthPage() {
               {view === 'reset' && 'Réinitialisation'}
             </h1>
             <p className="text-muted-foreground mt-2">
-              {view === 'login' && 'Accédez à votre espace SIHG'}
-              {view === 'forgot' && "Entrez votre email pour recevoir un lien de récupération"}
-              {view === 'reset' && 'Choisissez votre nouveau mot de passe'}
+              {isUnauthorized
+                ? "Compte non configuré"
+                : (view === 'login' ? 'Accédez à votre espace SIHG' : view === 'forgot' ? "Entrez votre email pour recevoir un lien de récupération" : 'Choisissez votre nouveau mot de passe')
+              }
             </p>
           </div>
 
-          {!isSuccess ? (
+          {isUnauthorized && (
+            <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-900 space-y-3 shadow-sm">
+                <div className="flex items-center gap-2 font-bold text-red-700">
+                  <ShieldAlert className="h-5 w-5" />
+                  Accès restreint
+                </div>
+                <p className="text-sm leading-relaxed">
+                  Votre compte Google/Email est bien authentifié, mais il n'est pas encore enregistré dans la base de données officielle du SIHG.
+                </p>
+                <div className="text-xs space-y-1 opacity-80 border-t border-red-200 pt-2">
+                  <p>• Contactez votre administrateur pour obtenir un rôle.</p>
+                  <p>• Email détecté : <span className="font-mono">{user?.email}</span></p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2 border-red-200 hover:bg-red-100 hover:text-red-900"
+                  asChild
+                >
+                  <Link to="/">Quitter</Link>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!isUnauthorized && !isSuccess ? (
             <>
               {view === 'login' ? (
                 <form onSubmit={handleSubmit} className="space-y-4">

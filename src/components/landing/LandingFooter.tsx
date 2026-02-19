@@ -1,29 +1,26 @@
 import { Link } from 'react-router-dom';
 import { Mail, ChevronRight, MapPin } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
+import logo from '@/assets/logo.png';
 
 export const LandingFooter = () => {
-    const { user } = useAuth();
     return (
         <footer id="contact" className="bg-[#1e3a8a] pt-20 pb-10 text-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-12 mb-20">
                     <div className="lg:col-span-2 space-y-6">
                         <div className="flex items-center">
-                            <img
-                                src="/src/assets/logo.png"
-                                alt="NEXUS Logo"
-                                className="h-16 w-auto brightness-0 invert"
-                            />
+                            <Link to="/">
+                                <img
+                                    src={logo}
+                                    alt="NEXUS Logo"
+                                    className="h-16 w-auto brightness-0 invert"
+                                />
+                            </Link>
                         </div>
                         <p className="text-blue-200 text-lg max-w-sm">
                             Système Intégré des Hydrocarbures de Guinée.
                             Une initiative stratégique pour la sécurité énergétique nationale.
                         </p>
-                        <div className="pt-4 flex gap-4">
-                            {/* Social handles if any */}
-                        </div>
                     </div>
 
                     <div>
